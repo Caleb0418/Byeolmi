@@ -48,7 +48,7 @@ const DEFAULT_ITEMS = [
     {
         id: "meal-kit",
         category: "easy",
-        name: "봉봉 부대찌개 밀키트 (3인분)",
+        name: "별미집 부대찌개 밀키트 (3인분)",
         basePrice: 13500,
         unit: "팩",
         tiers: []
