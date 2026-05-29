@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>올바른 선택 봉봉마켓 - 도매 발주</title>
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brandDark: '#111111',
+                        brandAccent: '#0a6c44',
+                        neutralBg: '#f8f9fa'
+                    },
+                    fontFamily: {
+                        serif: ['Noto Serif KR', 'Georgia', 'serif'],
+                        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f3f4f6;
+        }
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: #ffffff;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="text-brandDark font-sans">
+
+<div class="app-container">
+    
+    <!-- Header Area -->
+    <header class="sticky top-0 z-50 bg-white border-b border-gray-100 px-4 py-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+            <span class="material-symbols-outlined text-gray-400 cursor-pointer" onclick="window.close();">arrow_back</span>
+            <div class="text-center">
+                <span class="text-xs tracking-widest text-gray-400 font-semibold block mb-0.5">올바른 선택</span>
+                <h1 class="font-serif text-xl font-bold tracking-tight text-brandDark">봉봉마켓</h1>
+            </div>
+            <div class="flex items-center gap-3 text-gray-500">
+                <span class="material-symbols-outlined cursor-pointer" onclick="location.reload();">refresh</span>
+            </div>
+        </div>
+
+        <!-- 4-Category Slider -->
+        <nav class="flex gap-6 overflow-x-auto no-scrollbar border-t border-gray-50 pt-3 px-2 text-sm font-semibold">
+            <button onclick="filterCategory('all')" id="cat-all" class="text-brandDark border-b-2 border-brandDark pb-1 shrink-0">전체보기</button>
+            <button onclick="filterCategory('fresh')" id="cat-fresh" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">신선식품</button>
+            <button onclick="filterCategory('easy')" id="cat-easy" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">간편조리</button>
+            <button onclick="filterCategory('snack')" id="cat-snack" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">간식</button>
+            <button onclick="filterCategory('living')" id="cat-living" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">생활용품</button>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-4 space-y-6">
+        
+        <!-- Welcome Hero Banner (B2B Mode) -->
+        <div class="relative bg-neutralBg border border-gray-100 p-5 rounded-2xl space-y-1 overflow-hidden">
+            <h2 class="font-serif text-lg font-bold">도매 파트너 발주방</h2>
+            <p class="text-xs text-gray-500">도매 공급 품목 발주 전용 페이지입니다. 품목을 선택하고 수량을 전송해 주세요.</p>
+            <div class="absolute -right-4 -bottom-4 opacity-5">
+                <span class="material-symbols-outlined text-8xl">local_mall</span>
+            </div>
+        </div>
+
+        <!-- Dynamic Product Catalog List (No Tiers, No Price Info) -->
+        <section class="space-y-4">
+            <h3 class="font-bold text-sm tracking-tight flex items-center gap-1.5 text-brandDark border-b pb-2">
+                <span class="material-symbols-outlined text-brandAccent text-lg">list_alt</span>
+                취급 도매 품목 카탈로그
+            </h3>
+            
+            <div id="tiers-container" class="space-y-2">
+                <!-- Dynamic Items will be rendered here -->
+            </div>
+        </section>
+
+        <!-- Order Form Section -->
+        <section class="border-t pt-5 space-y-4">
+            <h3 class="font-bold text-sm text-brandDark flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-gray-500 text-lg">edit_document</span>
+                도매 발주 신청서 작성
+            </h3>
+            
+            <div id="closed-alert" class="hidden bg-red-50 text-red-700 p-4 rounded-xl text-center font-bold text-xs">
+                ⚠️ 금일 도매 주문 접수가 종료되었습니다.
+            </div>
+
+            <form id="order-form" class="space-y-4">
+                <!-- Buyer Name -->
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-400 mb-1">발주 등록 대표자명 / 업체명</label>
+                    <input type="text" id="buyer-name" required placeholder="예: 박민지 (마트유통)" 
+                           class="w-full rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark text-sm py-3 px-4">
+                </div>
+
+                <!-- Item Select -->
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-400 mb-1">발주 품목 선택</label>
+                    <select id="item-select" class="w-full rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark text-sm py-3 px-4">
+                        <!-- Dynamic items -->
+                    </select>
+                </div>
+
+                <!-- Quantity Controller -->
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-400 mb-1">발주 수량 (박스/단위)</label>
+                    <div class="flex items-center gap-4 mt-1">
+                        <button type="button" id="qty-minus" class="w-12 h-12 rounded-xl border flex items-center justify-center font-bold text-lg hover:bg-gray-50 active:scale-95">-</button>
+                        <input type="number" id="qty-input" value="5" min="1" required 
+                               class="w-20 text-center font-bold rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark py-3 text-lg">
+                        <button type="button" id="qty-plus" class="w-12 h-12 rounded-xl border flex items-center justify-center font-bold text-lg hover:bg-gray-50 active:scale-95">+</button>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="submit-btn" 
+                        class="w-full bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm transform active:scale-98 transition-all flex items-center justify-center gap-2 text-sm">
+                    <span class="material-symbols-outlined text-sm">check_circle</span>
+                    발주서 전송하기
+                </button>
+            </form>
+        </section>
+
+    </main>
+
+    <!-- Footer Area (Synced with Cafe24 Screenshot) -->
+    <footer class="p-6 bg-neutralBg border-t border-gray-200/60 text-[11px] text-gray-500 space-y-4">
+        <div class="space-y-1">
+            <h4 class="font-serif text-sm font-bold text-brandDark mb-2">올바른 선택 봉봉마켓</h4>
+            <p>상호명: 우모유통 | 대표자명: 김봉준</p>
+            <p>사업장 주소: 22350 인천광역시 중구 연안부두로107번길 34 2동 2층 2호(항동7가)</p>
+            <p>대표전화: 010-8990-9951 | 사업자 등록번호: 855-49-00656</p>
+            <p>통신판매업 신고번호: 2023-인천중구-0378</p>
+        </div>
+        <div class="border-t border-gray-200/40 pt-4 space-y-1">
+            <p class="font-bold text-brandDark">무통장 결제계좌 정보</p>
+            <p>국민은행 64680101557728 김봉준(우모유통)</p>
+        </div>
+        <p class="text-[10px] text-gray-400 pt-2 border-t border-gray-200/40">
+            Copyright © 봉봉마켓. All Rights Reserved. Hosting by Cafe24 Corp.
+        </p>
+    </footer>
+</div>
+
+<script src="app.js"></script>
+<script>
+    let activeCategory = 'all';
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const itemSelect = document.getElementById("item-select");
+        const qtyInput = document.getElementById("qty-input");
+        const orderForm = document.getElementById("order-form");
+        const closedAlert = document.getElementById("closed-alert");
+
+        // 1. 마감여부 체크
+        const isClosed = BongBongStore.isClosed();
+        if (isClosed) {
+            orderForm.classList.add("hidden");
+            closedAlert.classList.remove("hidden");
+        }
+
+        // 2. 캐시된 이름 복구
+        const cachedName = localStorage.getItem("bb_cached_buyer_name");
+        if (cachedName) {
+            document.getElementById("buyer-name").value = cachedName;
+        }
+
+        // 3. 수량 증감 제어
+        document.getElementById("qty-minus").addEventListener("click", () => {
+            let val = parseInt(qtyInput.value, 10);
+            if (val > 1) qtyInput.value = val - 1;
+        });
+
+        document.getElementById("qty-plus").addEventListener("click", () => {
+            let val = parseInt(qtyInput.value, 10);
+            qtyInput.value = val + 1;
+        });
+
+        // 4. 주문 제출 이벤트
+        orderForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const buyerName = document.getElementById("buyer-name").value.trim();
+            const itemId = itemSelect.value;
+            const qty = qtyInput.value;
+
+            if (!buyerName) return;
+
+            localStorage.setItem("bb_cached_buyer_name", buyerName);
+            BongBongStore.addOrder(buyerName, itemId, qty);
+
+            const items = BongBongStore.getItems();
+            alert(`발주서가 전송되었습니다!\n\n발주처: ${buyerName}\n품목: ${items.find(i=>i.id===itemId).name}\n수량: ${qty}박스\n\n* 카카오톡 대화방으로 발주 요약서 사본이 자동 전송되었습니다.`);
+            
+            renderPage();
+            qtyInput.value = 5;
+        });
+
+        renderPage();
+    });
+
+    // 카테고리 필터 변경
+    function filterCategory(catId) {
+        activeCategory = catId;
+        const tabs = ['all', 'fresh', 'easy', 'snack', 'living'];
+        tabs.forEach(t => {
+            const btn = document.getElementById(`cat-${t}`);
+            if (btn) {
+                if (t === catId) {
+                    btn.className = "text-brandDark border-b-2 border-brandDark pb-1 shrink-0";
+                } else {
+                    btn.className = "text-gray-400 hover:text-brandDark pb-1 shrink-0";
+                }
+            }
+        });
+        renderPage();
+    }
+
+    // 전체 화면 리프레시 렌더링 (달성율 게이지바 완전 제거)
+    function renderPage() {
+        const items = BongBongStore.getItems();
+        const itemSelect = document.getElementById("item-select");
+        const container = document.getElementById("tiers-container");
+
+        itemSelect.innerHTML = "";
+        container.innerHTML = "";
+
+        const filteredItems = activeCategory === 'all' 
+            ? items 
+            : items.filter(i => i.category === activeCategory);
+
+        if (filteredItems.length === 0) {
+            container.innerHTML = `<p class="text-xs text-gray-400 py-6 text-center">취급 중인 품목이 없습니다.</p>`;
+            return;
+        }
+
+        filteredItems.forEach(item => {
+            const isAvail = item.isAvailable !== false;
+            
+            // 드롭다운 바인딩
+            const opt = document.createElement("option");
+            opt.value = item.id;
+            if (isAvail) {
+                opt.textContent = item.name;
+            } else {
+                opt.textContent = `${item.name} (일시 품절)`;
+                opt.disabled = true;
+            }
+            itemSelect.appendChild(opt);
+
+            // 단순 품목 텍스트 카드 렌더링
+            const badgeClass = isAvail 
+                ? "text-brandAccent bg-green-50 border-brandAccent/20" 
+                : "text-red-500 bg-red-50 border-red-200";
+            const badgeText = isAvail ? "공급 중" : "일시 품절";
+            const opacityClass = isAvail ? "" : "opacity-60";
+
+            const itemHtml = `
+                <div class="p-4 border border-gray-100 rounded-xl bg-white flex justify-between items-center hover:shadow-sm transition-all ${opacityClass}">
+                    <div>
+                        <h4 class="font-bold text-gray-900 text-xs">${item.name}</h4>
+                        <p class="text-[10px] text-gray-400 mt-1">도매 규격 단위: ${item.unit}</p>
+                    </div>
+                    <div>
+                        <span class="px-2.5 py-1 border rounded-lg text-[10px] font-bold ${badgeClass}">${badgeText}</span>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML("beforeend", itemHtml);
+        });
+
+        // 드롭다운에서 비활성화되지 않은 첫 번째 옵션을 기본 선택값으로 지정
+        for (let i = 0; i < itemSelect.options.length; i++) {
+            if (!itemSelect.options[i].disabled) {
+                itemSelect.selectedIndex = i;
+                break;
+            }
+        }
+    }
+</script>
+</body>
+</html>

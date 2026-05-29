@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>봉봉 마켓 - 통합 프로토타입 테스트 환경</title>
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#002045',
+                        secondary: '#0a6c44'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+            background-color: #0b1329;
+            color: #f1f5f9;
+        }
+        /* Mobile Simulator Shell */
+        .phone-shell {
+            border: 12px solid #334155;
+            border-radius: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            background: #000;
+        }
+        .phone-notch {
+            width: 140px;
+            height: 25px;
+            background: #334155;
+            margin: 0 auto;
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Navigation Information -->
+    <header class="bg-[#0f172a] border-b border-slate-800 px-8 py-4 flex justify-between items-center shrink-0">
+        <div>
+            <h1 class="text-xl font-extrabold text-white flex items-center gap-2">
+                <span class="material-symbols-outlined text-green-400">labs</span>
+                봉봉 마켓 (BongBong Market) MVP 통합 테스트 베드
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">이 화면은 PRD 및 스티치 코드를 기반으로 제작된 동시 검증 환경입니다. 왼쪽 모바일로 주문하면 오른쪽 대시보드에 실시간 반영됩니다.</p>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="resetData()" class="flex items-center gap-1 px-4 py-2 bg-red-900/50 border border-red-700/50 hover:bg-red-800 text-red-200 text-xs font-bold rounded-xl transition-all">
+                <span class="material-symbols-outlined text-sm">restart_alt</span>
+                테스트 데이터 초기화
+            </button>
+            <button onclick="refreshFrames()" class="flex items-center gap-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-xl transition-all">
+                <span class="material-symbols-outlined text-sm">refresh</span>
+                양쪽 화면 동시 동기화
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Left Side: Mobile Phone Simulation (Buyer Interface) -->
+        <section class="w-[480px] border-r border-slate-800 bg-[#0f172a]/50 p-6 flex flex-col items-center justify-center shrink-0 overflow-y-auto">
+            <div class="text-center mb-3">
+                <span class="px-3 py-1 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 text-[11px] font-bold rounded-full">구매자 관점 (카카오톡 채널 인앱 웹뷰)</span>
+            </div>
+            
+            <!-- Phone mockup frame -->
+            <div class="phone-shell relative w-[360px] h-[720px] overflow-hidden flex flex-col">
+                <div class="phone-notch"></div>
+                <!-- Buyer Order App view -->
+                <iframe id="buyer-frame" src="client.html" class="w-full h-full border-none rounded-[28px] bg-white"></iframe>
+            </div>
+        </section>
+
+        <!-- Right Side: Desktop Screen Simulation (Supplier Admin Dashboard) -->
+        <section class="flex-1 bg-[#1e293b]/20 p-6 flex flex-col">
+            <div class="mb-3 flex justify-between items-center">
+                <span class="px-3 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[11px] font-bold rounded-full">공급자 관점 (사장님 반응형 웹 대시보드)</span>
+                <span class="text-xs text-slate-400">※ 가상 대시보드는 로컬 데이터 전송 및 동기화를 실시간 3초 주기로 추적합니다.</span>
+            </div>
+            
+            <!-- Desktop Dashboard View -->
+            <div class="flex-1 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl bg-[#0f172a]">
+                <iframe id="admin-frame" src="index.html" class="w-full h-full border-none"></iframe>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Script for testing sandbox -->
+    <script>
+        // 양쪽 아이프레임 동시 새로고침
+        function refreshFrames() {
+            document.getElementById('buyer-frame').contentWindow.location.reload();
+            document.getElementById('admin-frame').contentWindow.location.reload();
+        }
+
+        // 테스트를 위한 초기화
+        function resetData() {
+            if(confirm("모든 테스트용 주문 내역과 발주 마감 설정을 리셋하시겠습니까?")) {
+                localStorage.removeItem("bb_orders");
+                localStorage.removeItem("bb_is_closed");
+                refreshFrames();
+            }
+        }
+
+        // 왼쪽 폰에서 주문이 추가되면 오른쪽 관리자가 실시간 연동을 감지하고 테이블을 자동 리렌더링하도록 윈도우 스토리지 변화 이벤트 수신
+        window.addEventListener('storage', (e) => {
+            // 다른 프레임에서 변경이 생기면 동기화 강제 촉진
+            if (e.key === 'bb_orders' || e.key === 'bb_is_closed' || e.key === 'bb_items') {
+                const adminFrame = document.getElementById('admin-frame');
+                const buyerFrame = document.getElementById('buyer-frame');
+                
+                if (adminFrame.contentWindow.renderAdminDashboard) {
+                    adminFrame.contentWindow.renderAdminDashboard();
+                }
+                if (buyerFrame.contentWindow.location.reload) {
+                    // 주문서 상태 갱신
+                    buyerFrame.contentWindow.location.reload();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
