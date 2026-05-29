@@ -192,6 +192,20 @@ class BongBongStore {
         this.dispatchStorageChange();
     }
 
+    static updateOrder(orderId, updatedFields) {
+        let orders = this.getOrders();
+        orders = orders.map(order => order.id === orderId ? { ...order, ...updatedFields } : order);
+        this.saveOrders(orders);
+        this.dispatchStorageChange();
+    }
+
+    static deleteOrder(orderId) {
+        let orders = this.getOrders();
+        orders = orders.filter(order => order.id !== orderId);
+        this.saveOrders(orders);
+        this.dispatchStorageChange();
+    }
+
     static dispatchStorageChange() {
         window.dispatchEvent(new Event('storage'));
     }

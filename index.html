@@ -303,25 +303,29 @@
         <div id="analytics-tab" class="hidden space-y-8">
             <!-- KPI Metrics -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div class="glass-panel p-6 rounded-2xl">
+                <!-- 총 매출액 카드 -->
+                <div id="kpi-sales-card" onclick="openSalesDetailModal()" class="glass-panel p-6 rounded-2xl cursor-pointer hover:scale-[1.02] hover:shadow-lg transition-all">
                     <span class="text-xs font-bold text-gray-500 uppercase">당월 총 매출액</span>
                     <h4 class="text-2xl font-extrabold text-primary mt-2" id="kpi-total-sales">₩32,450,000</h4>
                     <span class="text-[10px] text-secondary font-bold mt-1 block">▲ 12.3% vs 전월</span>
                 </div>
-                <div class="glass-panel p-6 rounded-2xl">
+                <!-- 누적 판매량 카드 -->
+                <div id="kpi-volume-card" onclick="openVolumeDetailModal()" class="glass-panel p-6 rounded-2xl cursor-pointer hover:scale-[1.02] hover:shadow-lg transition-all">
                     <span class="text-xs font-bold text-gray-500 uppercase">누적 판매량</span>
                     <h4 class="text-2xl font-extrabold text-primary mt-2" id="kpi-total-volume">1,540 박스</h4>
                     <span class="text-[10px] text-secondary font-bold mt-1 block">▲ 11.5% vs 전월</span>
                 </div>
-                <div class="glass-panel p-6 rounded-2xl">
+                <!-- 평균 주문 객단가 카드 -->
+                <div id="kpi-ticket-card" onclick="openTicketDetailModal()" class="glass-panel p-6 rounded-2xl cursor-pointer hover:scale-[1.02] hover:shadow-lg transition-all">
                     <span class="text-xs font-bold text-gray-500 uppercase">평균 주문 객단가</span>
-                    <h4 class="text-2xl font-extrabold text-primary mt-2">₩425,000</h4>
-                    <span class="text-[10px] text-gray-400 font-bold mt-1 block">주문 건별 평균액</span>
+                    <h4 class="text-2xl font-extrabold text-primary mt-2" id="kpi-avg-ticket">₩425,000</h4>
+                    <span class="text-[10px] text-gray-400 font-bold mt-1 block" id="kpi-avg-ticket-sub">주문 건별 평균액</span>
                 </div>
-                <div class="glass-panel p-6 rounded-2xl">
+                <!-- 당월 활성 거래처 카드 -->
+                <div id="kpi-active-buyers-card" onclick="openActiveBuyersModal()" class="glass-panel p-6 rounded-2xl cursor-pointer hover:scale-[1.02] hover:shadow-lg transition-all">
                     <span class="text-xs font-bold text-gray-500 uppercase">당월 활성 거래처</span>
-                    <h4 class="text-2xl font-extrabold text-primary mt-2">28 개처</h4>
-                    <span class="text-[10px] text-secondary font-bold mt-1 block">신규 3개처 추가</span>
+                    <h4 class="text-2xl font-extrabold text-primary mt-2" id="kpi-active-buyers">28 개처</h4>
+                    <span class="text-[10px] text-secondary font-bold mt-1 block" id="kpi-active-buyers-sub">신규 3개처 추가</span>
                 </div>
             </div>
 
@@ -447,6 +451,185 @@
                     <span class="material-symbols-outlined text-sm">send</span>
                     알림톡 일괄 발송 승인
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. 매출액 상세 모달 -->
+    <div id="sales-detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
+            <div class="bg-primary px-5 py-4 flex justify-between items-center text-white">
+                <h3 class="text-md font-bold flex items-center gap-1.5">
+                    <span class="material-symbols-outlined">analytics</span>
+                    당월 총 매출 상세 분석
+                </h3>
+                <button type="button" onclick="closeModal('sales-detail-modal')" class="text-white hover:text-gray-200">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4">
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between items-center">
+                    <div>
+                        <span class="text-xs text-gray-400 font-bold block">당월 누적 총 매출액</span>
+                        <span class="text-xl font-extrabold text-primary" id="modal-sales-total-sales">₩0</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs text-gray-400 font-bold block">오늘 실시간 기여액</span>
+                        <span class="text-md font-bold text-secondary" id="modal-sales-today-sales">+₩0</span>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase">기간별 매출 통계</h4>
+                    <div class="overflow-x-auto rounded-xl border border-gray-100">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-100 font-bold text-gray-500">
+                                    <th class="px-4 py-2.5">구분 (기간)</th>
+                                    <th class="px-4 py-2.5 text-right">매출액</th>
+                                    <th class="px-4 py-2.5 text-right">주문량 (박스)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-sales-table-body" class="divide-y divide-gray-50 text-gray-700">
+                                <!-- Dynamic rendering -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 누적 판매량 상세 모달 -->
+    <div id="volume-detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
+            <div class="bg-primary px-5 py-4 flex justify-between items-center text-white">
+                <h3 class="text-md font-bold flex items-center gap-1.5">
+                    <span class="material-symbols-outlined">package_2</span>
+                    누적 판매량 상세 분포
+                </h3>
+                <button type="button" onclick="closeModal('volume-detail-modal')" class="text-white hover:text-gray-200">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4">
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between items-center">
+                    <div>
+                        <span class="text-xs text-gray-400 font-bold block">당월 누적 총 판매량</span>
+                        <span class="text-xl font-extrabold text-primary" id="modal-volume-total-qty">0 박스</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs text-gray-400 font-bold block">오늘 실시간 추가량</span>
+                        <span class="text-md font-bold text-secondary" id="modal-volume-today-qty">+0 박스</span>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase">품목별 판매량 현황</h4>
+                    <div class="overflow-x-auto rounded-xl border border-gray-100">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-100 font-bold text-gray-500">
+                                    <th class="px-4 py-2.5">품목명</th>
+                                    <th class="px-4 py-2.5 text-right">총 주문량 (당일 포함)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-volume-table-body" class="divide-y divide-gray-50 text-gray-700">
+                                <!-- Dynamic rendering -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 평균 주문 객단가 상세 모달 -->
+    <div id="ticket-detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
+            <div class="bg-primary px-5 py-4 flex justify-between items-center text-white">
+                <h3 class="text-md font-bold flex items-center gap-1.5">
+                    <span class="material-symbols-outlined">payments</span>
+                    평균 주문 객단가 상세 분석
+                </h3>
+                <button type="button" onclick="closeModal('ticket-detail-modal')" class="text-white hover:text-gray-200">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4">
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <div class="flex justify-between items-center border-b border-gray-200 pb-2 mb-2">
+                        <div>
+                            <span class="text-xs text-gray-400 font-bold block">계산된 평균 객단가</span>
+                            <span class="text-xl font-extrabold text-primary" id="modal-ticket-average">₩0</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs text-gray-400 font-bold block">총 주문 건수</span>
+                            <span class="text-md font-bold text-secondary" id="modal-ticket-order-count">0건</span>
+                        </div>
+                    </div>
+                    <div class="text-[10px] text-gray-400 leading-normal">
+                        💡 <strong>객단가 산출 공식</strong>: (기존 당월 기여 매출액 + 오늘 실시간 매출액) / (기존 가상 주문 건수 76건 + 오늘 신규 주문 건수)
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase">거래처별 누적 매출액 기여 명세</h4>
+                    <div class="overflow-x-auto rounded-xl border border-gray-100 max-h-60 overflow-y-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-100 font-bold text-gray-500 sticky top-0">
+                                    <th class="px-4 py-2.5 bg-gray-50">거래처명</th>
+                                    <th class="px-4 py-2.5 text-right bg-gray-50 font-mono">기여 매출액 (당일 포함)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-ticket-table-body" class="divide-y divide-gray-50 text-gray-700">
+                                <!-- Dynamic rendering -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 당월 활성 거래처 상세 모달 -->
+    <div id="active-buyers-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
+            <div class="bg-primary px-5 py-4 flex justify-between items-center text-white">
+                <h3 class="text-md font-bold flex items-center gap-1.5">
+                    <span class="material-symbols-outlined">group</span>
+                    당월 활성 거래처 명단
+                </h3>
+                <button type="button" onclick="closeModal('active-buyers-modal')" class="text-white hover:text-gray-200">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4">
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between items-center">
+                    <div>
+                        <span class="text-xs text-gray-400 font-bold block">당월 활성 거래처 수</span>
+                        <span class="text-xl font-extrabold text-primary" id="modal-active-buyers-total">0개처</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs text-gray-400 font-bold block">오늘 신규 추가</span>
+                        <span class="text-md font-bold text-secondary" id="modal-active-buyers-new">+0개처</span>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase">거래처 목록</h4>
+                    <div class="overflow-x-auto rounded-xl border border-gray-100 max-h-60 overflow-y-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-100 font-bold text-gray-500 sticky top-0">
+                                    <th class="px-4 py-2.5 bg-gray-50">거래처명</th>
+                                    <th class="px-4 py-2.5 bg-gray-50">구분</th>
+                                    <th class="px-4 py-2.5 text-right bg-gray-50 font-mono">당월 매출 기여</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-active-buyers-table-body" class="divide-y divide-gray-50 text-gray-700">
+                                <!-- Dynamic rendering -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -832,6 +1015,24 @@
         document.getElementById("kpi-total-sales").textContent = `₩${totalSalesVal.toLocaleString()}`;
         document.getElementById("kpi-total-volume").textContent = `${totalVolumeVal.toLocaleString()} 박스`;
 
+        // 1. 평균 주문 객단가 동적 계산
+        const baseOrderCount = 76;
+        const totalOrderCount = baseOrderCount + orders.length;
+        const avgTicketVal = Math.round(totalSalesVal / totalOrderCount);
+        document.getElementById("kpi-avg-ticket").textContent = `₩${avgTicketVal.toLocaleString()}`;
+        document.getElementById("kpi-avg-ticket-sub").textContent = `총 ${totalOrderCount}건 주문 기준`;
+
+        // 2. 당월 활성 거래처 및 신규 거래처 동적 계산
+        const existingBuyerNames = new Set(data.buyers.map(b => b.name));
+        const todayBuyerNames = new Set(orders.map(o => o.buyerName));
+        const allBuyers = new Set([...existingBuyerNames, ...todayBuyerNames]);
+        let newBuyersCount = 0;
+        todayBuyerNames.forEach(name => {
+            if (!existingBuyerNames.has(name)) newBuyersCount++;
+        });
+        document.getElementById("kpi-active-buyers").textContent = `${allBuyers.size} 개처`;
+        document.getElementById("kpi-active-buyers-sub").textContent = `신규 ${newBuyersCount}개처 추가`;
+
         data.buyers.forEach(buyer => {
             const isNormal = buyer.status === "정상";
             const selectColor = isNormal 
@@ -1197,6 +1398,212 @@
             // 삭제 후에는 즉각 리렌더링되도록 강제 주입
             renderAdminDashboard(true);
         }
+    };
+
+    // --- KPI 상세 모달 제어 로직 ---
+    window.closeModal = function(modalId) {
+        document.getElementById(modalId).classList.add("hidden");
+    };
+
+    window.openSalesDetailModal = function() {
+        const data = BongBongStore.getAnalyticsData();
+        const orders = BongBongStore.getOrders();
+        const todayRevenue = BongBongCalculator.getProjectedRevenue();
+        const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
+
+        const baseMonthlySales = 32450000;
+        const totalSalesVal = baseMonthlySales + todayRevenue;
+
+        document.getElementById("modal-sales-total-sales").textContent = `₩${totalSalesVal.toLocaleString()}`;
+        document.getElementById("modal-sales-today-sales").textContent = `+₩${todayRevenue.toLocaleString()}`;
+
+        const tbody = document.getElementById("modal-sales-table-body");
+        tbody.innerHTML = "";
+
+        const monthlyLen = data.monthly.labels.length;
+        for (let i = monthlyLen - 1; i >= 0; i--) {
+            const isCurrentMonth = data.monthly.labels[i] === "5월";
+            const sales = isCurrentMonth ? totalSalesVal : data.monthly.sales[i];
+            const volume = isCurrentMonth ? (data.monthly.volumes[i] + todayVolume) : data.monthly.volumes[i];
+            tbody.insertAdjacentHTML("beforeend", `
+                <tr class="${isCurrentMonth ? 'bg-blue-50/50 font-bold' : ''}">
+                    <td class="px-4 py-2.5">${data.monthly.labels[i]} 누적</td>
+                    <td class="px-4 py-2.5 text-right font-bold text-primary">₩${sales.toLocaleString()}</td>
+                    <td class="px-4 py-2.5 text-right">${volume.toLocaleString()} 박스</td>
+                </tr>
+            `);
+        }
+
+        document.getElementById("sales-detail-modal").classList.remove("hidden");
+    };
+
+    window.openVolumeDetailModal = function() {
+        const items = BongBongStore.getItems();
+        const orders = BongBongStore.getOrders();
+        const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
+        const baseMonthlyVolume = 1540;
+        const totalVolumeVal = baseMonthlyVolume + todayVolume;
+
+        document.getElementById("modal-volume-total-qty").textContent = `${totalVolumeVal.toLocaleString()} 박스`;
+        document.getElementById("modal-volume-today-qty").textContent = `+${todayVolume.toLocaleString()} 박스`;
+
+        const tbody = document.getElementById("modal-volume-table-body");
+        tbody.innerHTML = "";
+
+        const baseProductVolumes = {
+            "potato": Math.round(baseMonthlyVolume * 0.55),
+            "garlic": Math.round(baseMonthlyVolume * 0.20),
+            "onion": Math.round(baseMonthlyVolume * 0.15),
+            "other": Math.round(baseMonthlyVolume * 0.10)
+        };
+
+        const todayProductVolumes = {};
+        orders.forEach(o => {
+            todayProductVolumes[o.itemId] = (todayProductVolumes[o.itemId] || 0) + o.qty;
+        });
+
+        items.forEach(item => {
+            const baseVol = baseProductVolumes[item.id] || 0;
+            const todayVol = todayProductVolumes[item.id] || 0;
+            const totalVol = baseVol + todayVol;
+            tbody.insertAdjacentHTML("beforeend", `
+                <tr>
+                    <td class="px-4 py-2.5 font-bold">${item.name}</td>
+                    <td class="px-4 py-2.5 text-right font-semibold text-primary">${totalVol.toLocaleString()} ${item.unit}</td>
+                </tr>
+            `);
+        });
+
+        const otherBase = baseProductVolumes["other"] || 0;
+        let otherToday = 0;
+        orders.forEach(o => {
+            if (!items.find(i => i.id === o.itemId)) {
+                otherToday += o.qty;
+            }
+        });
+        if (otherBase + otherToday > 0) {
+            tbody.insertAdjacentHTML("beforeend", `
+                <tr>
+                    <td class="px-4 py-2.5 font-bold text-gray-500">기타 품목</td>
+                    <td class="px-4 py-2.5 text-right font-semibold text-gray-600">${(otherBase + otherToday).toLocaleString()} 박스</td>
+                </tr>
+            `);
+        }
+
+        document.getElementById("volume-detail-modal").classList.remove("hidden");
+    };
+
+    window.openTicketDetailModal = function() {
+        const data = BongBongStore.getAnalyticsData();
+        const items = BongBongStore.getItems();
+        const orders = BongBongStore.getOrders();
+        
+        const baseMonthlySales = 32450000;
+        const todayRevenue = BongBongCalculator.getProjectedRevenue();
+        const totalSalesVal = baseMonthlySales + todayRevenue;
+
+        const baseOrderCount = 76;
+        const totalOrderCount = baseOrderCount + orders.length;
+        const avgTicketVal = Math.round(totalSalesVal / totalOrderCount);
+
+        document.getElementById("modal-ticket-average").textContent = `₩${avgTicketVal.toLocaleString()}`;
+        document.getElementById("modal-ticket-order-count").textContent = `${totalOrderCount}건`;
+
+        const tbody = document.getElementById("modal-ticket-table-body");
+        tbody.innerHTML = "";
+
+        const buyerContribution = {};
+        data.buyers.forEach(b => {
+            buyerContribution[b.name] = b.revenue;
+        });
+
+        orders.forEach(o => {
+            const item = items.find(i => i.id === o.itemId);
+            const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
+            buyerContribution[o.buyerName] = (buyerContribution[o.buyerName] || 0) + (o.qty * price);
+        });
+
+        const sortedBuyers = Object.entries(buyerContribution).sort((a, b) => b[1] - a[1]);
+
+        sortedBuyers.forEach(([name, rev]) => {
+            tbody.insertAdjacentHTML("beforeend", `
+                <tr>
+                    <td class="px-4 py-2.5 font-bold">${name}</td>
+                    <td class="px-4 py-2.5 text-right font-bold text-primary">₩${rev.toLocaleString()}</td>
+                </tr>
+            `);
+        });
+
+        document.getElementById("ticket-detail-modal").classList.remove("hidden");
+    };
+
+    window.openActiveBuyersModal = function() {
+        const data = BongBongStore.getAnalyticsData();
+        const items = BongBongStore.getItems();
+        const orders = BongBongStore.getOrders();
+
+        const existingBuyerNames = new Set(data.buyers.map(b => b.name));
+        const todayBuyerNames = new Set(orders.map(o => o.buyerName));
+        const allBuyers = new Set([...existingBuyerNames, ...todayBuyerNames]);
+
+        let newBuyersCount = 0;
+        todayBuyerNames.forEach(name => {
+            if (!existingBuyerNames.has(name)) newBuyersCount++;
+        });
+
+        document.getElementById("modal-active-buyers-total").textContent = `${allBuyers.size}개처`;
+        document.getElementById("modal-active-buyers-new").textContent = `+${newBuyersCount}개처`;
+
+        const tbody = document.getElementById("modal-active-buyers-table-body");
+        tbody.innerHTML = "";
+
+        const buyerMap = {};
+        data.buyers.forEach(b => {
+            buyerMap[b.name] = {
+                name: b.name,
+                isNew: false,
+                mainItem: b.mainItem,
+                revenue: b.revenue
+            };
+        });
+
+        orders.forEach(o => {
+            const item = items.find(i => i.id === o.itemId);
+            const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
+            const orderRev = o.qty * price;
+
+            if (buyerMap[o.buyerName]) {
+                buyerMap[o.buyerName].revenue += orderRev;
+            } else {
+                buyerMap[o.buyerName] = {
+                    name: o.buyerName,
+                    isNew: true,
+                    mainItem: item ? item.name.replace(/\(.*?\)/g, "").trim() : o.itemId,
+                    revenue: orderRev
+                };
+            }
+        });
+
+        Object.values(buyerMap).forEach(buyer => {
+            const badge = buyer.isNew 
+                ? `<span class="text-[9px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200">당일 신규</span>` 
+                : `<span class="text-[9px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">기존 거래처</span>`;
+
+            tbody.insertAdjacentHTML("beforeend", `
+                <tr>
+                    <td class="px-4 py-2.5 font-bold">
+                        <div class="flex flex-col">
+                            <span>${buyer.name}</span>
+                            <span class="text-[10px] text-gray-400 font-normal">주품목: ${buyer.mainItem}</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-2.5">${badge}</td>
+                    <td class="px-4 py-2.5 text-right font-mono font-bold text-primary">₩${buyer.revenue.toLocaleString()}</td>
+                </tr>
+            `);
+        });
+
+        document.getElementById("active-buyers-modal").classList.remove("hidden");
     };
 </script>
 </body>
