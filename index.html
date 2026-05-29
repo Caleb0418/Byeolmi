@@ -103,9 +103,9 @@
             <p class="text-sm text-gray-500" id="current-date">로딩 중...</p>
         </div>
         <div class="flex gap-4">
-            <button id="close-buy-btn" class="flex items-center gap-2 px-6 h-12 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 shadow-md">
-                <span class="material-symbols-outlined">block</span>
-                오늘 발주 마감하기
+            <button id="approve-orders-btn" class="flex items-center gap-2 px-6 h-12 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-md transition-all">
+                <span class="material-symbols-outlined">assignment_turned_in</span>
+                지금까지 들어온 발주 승인하기
             </button>
             <button id="send-settle-btn" class="flex items-center gap-2 px-6 h-12 rounded-xl bg-secondary text-white font-bold text-sm hover:bg-opacity-90 shadow-md">
                 <span class="material-symbols-outlined">send</span>
@@ -649,7 +649,7 @@
         const adminClosedBadge = document.getElementById("admin-closed-badge");
         const priceTrackersContainer = document.getElementById("price-trackers-container");
         
-        const closeBuyBtn = document.getElementById("close-buy-btn");
+        const approveOrdersBtn = document.getElementById("approve-orders-btn");
         const sendSettleBtn = document.getElementById("send-settle-btn");
         
         const addOrderBtn = document.getElementById("add-order-btn");
@@ -691,18 +691,11 @@
                 }
             }
 
-            // 1. 마감 배지 업데이트
-            if (isClosed) {
-                adminClosedBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700";
-                adminClosedBadge.textContent = "발주 마감 완료";
-                closeBuyBtn.disabled = true;
-                closeBuyBtn.className = "flex items-center gap-2 px-6 h-12 rounded-xl bg-gray-300 text-gray-500 font-bold text-sm cursor-not-allowed";
-            } else {
-                adminClosedBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700";
-                adminClosedBadge.textContent = "발주 접수 중";
-                closeBuyBtn.disabled = false;
-                closeBuyBtn.className = "flex items-center gap-2 px-6 h-12 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 shadow-md";
-            }
+            // 1. 마감 배지 및 승인 버튼 업데이트 (상시 접수 상태)
+            adminClosedBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700";
+            adminClosedBadge.textContent = "실시간 상시 접수 중";
+            approveOrdersBtn.disabled = false;
+            approveOrdersBtn.className = "flex items-center gap-2 px-6 h-12 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-md transition-all";
 
             // 2. 총 주문량 계산
             const totalQty = orders.reduce((sum, o) => sum + o.qty, 0);
@@ -811,10 +804,6 @@
         }
 
         addOrderBtn.addEventListener("click", () => {
-            if (BongBongStore.isClosed()) {
-                alert("이미 오늘 주문 접수가 마감되었습니다.");
-                return;
-            }
             manualOrderModal.classList.remove("hidden");
         });
         closeModalBtn.addEventListener("click", () => manualOrderModal.classList.add("hidden"));
@@ -833,16 +822,23 @@
             renderAdminDashboard();
         });
 
-        closeBuyBtn.addEventListener("click", () => {
-            if (confirm("오늘 주문 접수를 종료하고 최종 주문량을 마감하시겠습니까? (이후 신규 발주 접수가 차단됩니다.)")) {
-                BongBongStore.setClosedStatus(true);
-                const orders = BongBongStore.getOrders();
+        approveOrdersBtn.addEventListener("click", () => {
+            const orders = BongBongStore.getOrders();
+            const pendingOrders = orders.filter(o => o.status === "대기");
+
+            if (pendingOrders.length === 0) {
+                alert("승인 대기 중인 주문이 없습니다.");
+                return;
+            }
+
+            if (confirm(`현재 대기 중인 ${pendingOrders.length}건의 주문을 일괄 승인(확정)하시겠습니까?`)) {
                 orders.forEach(o => {
                     if (o.status === "대기") o.status = "확정";
                 });
                 BongBongStore.saveOrders(orders);
                 renderAdminDashboard();
-                alert("금일 주문 마감이 완료되었습니다.");
+                BongBongStore.dispatchStorageChange();
+                alert(`${pendingOrders.length}건의 주문이 최종 승인(확정)되었습니다.`);
             }
         });
 
@@ -854,10 +850,6 @@
         const previewCount = document.getElementById("preview-count");
 
         sendSettleBtn.addEventListener("click", () => {
-            if (!BongBongStore.isClosed()) {
-                alert("정산 통보를 전송하기 전에 먼저 '오늘 발주 마감하기'를 눌러 마감을 완료해 주십시오.");
-                return;
-            }
 
             const items = BongBongStore.getItems();
             const orders = BongBongStore.getOrders();

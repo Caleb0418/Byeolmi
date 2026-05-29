@@ -218,12 +218,12 @@
         const orderForm = document.getElementById("order-form");
         const closedAlert = document.getElementById("closed-alert");
 
-        // 1. 마감여부 체크
-        const isClosed = BongBongStore.isClosed();
-        if (isClosed) {
-            orderForm.classList.add("hidden");
-            closedAlert.classList.remove("hidden");
-        }
+        // 1. 마감여부 체크 제거 (상시 접수 가능)
+        // const isClosed = BongBongStore.isClosed();
+        // if (isClosed) {
+        //     orderForm.classList.add("hidden");
+        //     closedAlert.classList.remove("hidden");
+        // }
 
         // 2. 캐시된 이름 복구
         const cachedName = localStorage.getItem("bb_cached_buyer_name");
