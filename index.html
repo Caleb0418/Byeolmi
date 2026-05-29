@@ -302,12 +302,12 @@
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div class="glass-panel p-6 rounded-2xl">
                     <span class="text-xs font-bold text-gray-500 uppercase">당월 총 매출액</span>
-                    <h4 class="text-2xl font-extrabold text-primary mt-2">₩32,450,000</h4>
+                    <h4 class="text-2xl font-extrabold text-primary mt-2" id="kpi-total-sales">₩32,450,000</h4>
                     <span class="text-[10px] text-secondary font-bold mt-1 block">▲ 12.3% vs 전월</span>
                 </div>
                 <div class="glass-panel p-6 rounded-2xl">
                     <span class="text-xs font-bold text-gray-500 uppercase">누적 판매량</span>
-                    <h4 class="text-2xl font-extrabold text-primary mt-2">1,540 박스</h4>
+                    <h4 class="text-2xl font-extrabold text-primary mt-2" id="kpi-total-volume">1,540 박스</h4>
                     <span class="text-[10px] text-secondary font-bold mt-1 block">▲ 11.5% vs 전월</span>
                 </div>
                 <div class="glass-panel p-6 rounded-2xl">
@@ -752,7 +752,27 @@
         const data = BongBongStore.getAnalyticsData();
         const tbody = document.getElementById("analytics-buyers-body");
         tbody.innerHTML = "";
+        
+        // 오늘 실시간 데이터 합산 반영
+        const todayRevenue = BongBongCalculator.getProjectedRevenue();
+        const orders = BongBongStore.getOrders();
+        const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
+
+        const baseMonthlySales = 32450000;
+        const baseMonthlyVolume = 1540;
+
+        const totalSalesVal = baseMonthlySales + todayRevenue;
+        const totalVolumeVal = baseMonthlyVolume + todayVolume;
+
+        document.getElementById("kpi-total-sales").textContent = `₩${totalSalesVal.toLocaleString()}`;
+        document.getElementById("kpi-total-volume").textContent = `${totalVolumeVal.toLocaleString()} 박스`;
+
         data.buyers.forEach(buyer => {
+            const isNormal = buyer.status === "정상";
+            const selectColor = isNormal 
+                ? "bg-green-50 text-green-700 border-green-200" 
+                : "bg-red-50 text-red-700 border-red-200";
+
             const tr = `
                 <tr class="hover:bg-gray-50 transition-colors h-14">
                     <td class="px-6 py-4 font-bold text-gray-900">${buyer.name}</td>
@@ -760,9 +780,12 @@
                     <td class="px-6 py-4 font-semibold">${buyer.qty} 박스</td>
                     <td class="px-6 py-4 font-bold text-primary">₩${buyer.revenue.toLocaleString()}</td>
                     <td class="px-6 py-4">
-                        <span class="px-2.5 py-1 rounded-full text-xs font-bold ${buyer.status === '정상' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}">
-                            ${buyer.status}
-                        </span>
+                        <select onchange="changeBuyerStatus('${buyer.name}', this.value)" class="text-xs font-bold rounded-full px-3 py-1.5 border border-gray-200 outline-none focus:ring-0 appearance-none text-center ${selectColor} cursor-pointer">
+                            <option value="정상" ${isNormal ? 'selected' : ''}>정상 (수금완료)</option>
+                            <option value="미수금_입력" ${!isNormal ? 'selected' : ''}>
+                                ${isNormal ? '미수금 등록...' : '미수금 (' + buyer.status.replace('미수금', '').trim() + ')'}
+                            </option>
+                        </select>
                     </td>
                 </tr>
             `;
@@ -772,6 +795,51 @@
         buildSalesTrendChart('monthly');
         buildProductShareChart();
     }
+
+    window.changeBuyerStatus = function(buyerName, selectValue) {
+        if (selectValue === "미수금_입력") {
+            const currentData = BongBongStore.getAnalyticsBuyers();
+            const buyer = currentData.find(b => b.name === buyerName);
+            const currentStatus = buyer ? buyer.status : "";
+            const currentPrice = currentStatus.includes("미수금") ? currentStatus.replace("미수금", "").trim() : "₩120,000";
+            
+            const moneyInput = prompt(`[${buyerName}]의 미수금액을 입력하세요:`, currentPrice);
+            if (moneyInput === null) {
+                renderAnalyticsBoard();
+                return;
+            }
+            const cleanMoney = moneyInput.trim();
+            if (cleanMoney === "") {
+                BongBongStore.updateBuyerStatus(buyerName, "정상");
+            } else {
+                const formattedMoney = cleanMoney.startsWith("₩") ? cleanMoney : "₩" + cleanMoney;
+                BongBongStore.updateBuyerStatus(buyerName, "미수금 " + formattedMoney);
+            }
+        } else {
+            BongBongStore.updateBuyerStatus(buyerName, "정상");
+        }
+        renderAnalyticsBoard();
+    };
+
+    window.updateChartType = function(period) {
+        buildSalesTrendChart(period);
+        
+        const btnMonthly = document.getElementById("btn-chart-monthly");
+        const btnWeekly = document.getElementById("btn-chart-weekly");
+        const btnDaily = document.getElementById("btn-chart-daily");
+        
+        btnMonthly.className = "px-3 py-1 text-gray-500";
+        btnWeekly.className = "px-3 py-1 text-gray-500";
+        btnDaily.className = "px-3 py-1 text-gray-500";
+        
+        if (period === 'monthly') {
+            btnMonthly.className = "px-3 py-1 bg-white text-primary rounded-lg shadow-sm";
+        } else if (period === 'weekly') {
+            btnWeekly.className = "px-3 py-1 bg-white text-primary rounded-lg shadow-sm";
+        } else if (period === 'daily') {
+            btnDaily.className = "px-3 py-1 bg-white text-primary rounded-lg shadow-sm";
+        }
+    };
 
     function buildSalesTrendChart(period) {
         const canvas = document.getElementById("sales-trend-chart");
@@ -824,16 +892,30 @@
         const ctx = canvas.getContext("2d");
         if (shareChartInstance) shareChartInstance.destroy();
 
+        const shareLabels = ['골드 감자 (55%)', '깐마늘 XL (20%)', '햇 양파 (15%)', '기타 (10%)'];
         shareChartInstance = new Chart(ctx, {
             type: 'doughnut',
             data: {
-                labels: ['골드 감자', '깐마늘 XL', '햇 양파', '기타'],
+                labels: shareLabels,
                 datasets: [{
                     data: [55, 20, 15, 10],
                     backgroundColor: ['#002045', '#0a6c44', '#adc7f7', '#dde3eb']
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed;
+                                return ` 비중: ${value}%`;
+                            }
+                        }
+                    }
+                }
+            }
         });
     }
 
