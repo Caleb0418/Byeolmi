@@ -708,6 +708,7 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/zod@3.22.4/lib/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 <script>
     let isBulkEditing = false;
@@ -734,180 +735,189 @@
         document.getElementById('current-date').textContent = new Date().toLocaleDateString('ko-KR', dateOptions);
 
         // Core Render Function
-        window.renderAdminDashboard = function() {
+        window.renderAdminDashboard = async function() {
             // 일괄 편집 모드일 때 3초 타이머나 외부 스토리지 싱크로 인한 자동 리렌더링 강제 차단 (입력값 보존)
-            // 단, toggleBulkEdit 내부에서 수동 호출 시에는 리렌더링을 허용하기 위해 인자를 사용
             const isManualCall = arguments[0] === true;
             if (isBulkEditing && !isManualCall) return;
 
-            const items = BongBongStore.getItems();
-            const orders = BongBongStore.getOrders();
-            const isClosed = BongBongStore.isClosed();
+            try {
+                const items = await BongBongStore.getItems();
+                const orders = await BongBongStore.getOrders();
+                const isClosed = BongBongStore.isClosed();
 
-            // 0. 일괄 수정 버튼 상태 업데이트
-            const bulkEditBtn = document.getElementById("bulk-edit-btn");
-            if (bulkEditBtn) {
-                if (isBulkEditing) {
-                    bulkEditBtn.innerHTML = `
-                        <span class="material-symbols-outlined text-sm">done</span>
-                        완료
-                    `;
-                    bulkEditBtn.className = "bg-secondary hover:bg-opacity-90 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1";
-                    bulkEditBtn.setAttribute("onclick", "toggleBulkEdit(false)");
-                } else {
-                    bulkEditBtn.innerHTML = `
-                        <span class="material-symbols-outlined text-sm">edit</span>
-                        일괄 수정
-                    `;
-                    bulkEditBtn.className = "bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1";
-                    bulkEditBtn.setAttribute("onclick", "toggleBulkEdit(true)");
+                // 0. 일괄 수정 버튼 상태 업데이트
+                const bulkEditBtn = document.getElementById("bulk-edit-btn");
+                if (bulkEditBtn) {
+                    if (isBulkEditing) {
+                        bulkEditBtn.innerHTML = `
+                            <span class="material-symbols-outlined text-sm">done</span>
+                            완료
+                        `;
+                        bulkEditBtn.className = "bg-secondary hover:bg-opacity-90 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1";
+                        bulkEditBtn.setAttribute("onclick", "toggleBulkEdit(false)");
+                    } else {
+                        bulkEditBtn.innerHTML = `
+                            <span class="material-symbols-outlined text-sm">edit</span>
+                            일괄 수정
+                        `;
+                        bulkEditBtn.className = "bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1";
+                        bulkEditBtn.setAttribute("onclick", "toggleBulkEdit(true)");
+                    }
                 }
-            }
 
-            // 1. 마감 배지 및 승인 버튼 업데이트 (상시 접수 상태)
-            if (adminClosedBadge) {
-                adminClosedBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700";
-                adminClosedBadge.textContent = "실시간 상시 접수 중";
-            }
-            if (approveOrdersBtn) {
-                approveOrdersBtn.disabled = false;
-                approveOrdersBtn.className = "flex items-center gap-2 px-6 h-12 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-md transition-all";
-            }
-
-            // 승인 대기 주문 카드 정보 업데이트
-            const pendingOrders = orders.filter(o => o.status === "대기");
-            const pendingCount = pendingOrders.length;
-            const pendingQty = pendingOrders.reduce((sum, o) => sum + o.qty, 0);
-            
-            const pendingCountCounter = document.getElementById("pending-count-counter");
-            if (pendingCountCounter) pendingCountCounter.textContent = `${pendingCount} 건`;
-            
-            const pendingQtySub = document.getElementById("pending-qty-sub");
-            const pendingIcon = document.getElementById("kpi-pending-icon");
-            if (pendingQtySub) {
-                if (pendingCount > 0) {
-                    pendingQtySub.textContent = `미승인 수량: ${pendingQty} 박스`;
-                    pendingQtySub.className = "text-xs font-bold text-red-500";
-                    if (pendingIcon) pendingIcon.className = "material-symbols-outlined text-red-500 animate-pulse";
-                } else {
-                    pendingQtySub.textContent = "대기 중인 주문 없음";
-                    pendingQtySub.className = "text-xs font-semibold text-gray-400";
-                    if (pendingIcon) pendingIcon.className = "material-symbols-outlined text-primary";
+                // 1. 마감 배지 및 승인 버튼 업데이트 (상시 접수 상태)
+                if (adminClosedBadge) {
+                    adminClosedBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700";
+                    adminClosedBadge.textContent = "실시간 상시 접수 중";
                 }
-            }
-
-            // 2. 총 주문량 계산
-            const totalQty = orders.reduce((sum, o) => sum + o.qty, 0);
-            if (totalQtyCounter) totalQtyCounter.textContent = totalQty.toLocaleString();
-
-            // 3. 현재 예상 매출 계산
-            const revenueVal = BongBongCalculator.getProjectedRevenue();
-            projectedRevenue.textContent = `₩${revenueVal.toLocaleString()}`;
-
-            // 4. 주문 테이블 렌더링
-            orderTableBody.innerHTML = "";
-            orders.forEach(order => {
-                const item = items.find(i => i.id === order.itemId);
-                const statusColor = order.status === "대기" 
-                    ? "bg-blue-100 text-blue-700" 
-                    : order.status === "승인" 
-                    ? "bg-green-100 text-green-700" 
-                    : order.status === "배송중"
-                    ? "bg-yellow-100 text-yellow-700"
-                    : "bg-gray-100 text-gray-700";
-
-                const isEditing = isBulkEditing;
-
-                let tr = "";
-                if (isEditing) {
-                    let itemOptions = "";
-                    items.forEach(i => {
-                        itemOptions += `<option value="${i.id}" ${i.id === order.itemId ? 'selected' : ''}>${i.name}</option>`;
-                    });
-
-                    tr = `
-                        <tr class="bg-blue-50/20 border-b border-blue-100 h-16" data-order-id="${order.id}">
-                            <td class="px-6 py-2">
-                                <input type="text" id="edit-row-buyer-${order.id}" value="${order.buyerName}" class="w-full text-xs font-bold border-gray-200 rounded-xl p-1.5 focus:border-primary focus:ring-primary">
-                            </td>
-                            <td class="px-6 py-2">
-                                <select id="edit-row-item-${order.id}" class="w-full text-xs border-gray-200 rounded-xl p-1.5 focus:border-primary focus:ring-primary">
-                                    ${itemOptions}
-                                </select>
-                            </td>
-                            <td class="px-6 py-2 flex items-center gap-1 mt-1 border-0">
-                                <input type="number" id="edit-row-qty-${order.id}" value="${order.qty}" min="1" class="w-16 text-xs font-semibold border-gray-200 rounded-xl p-1.5 focus:border-primary focus:ring-primary">
-                                <span class="text-xs text-gray-500 font-bold">${item ? item.unit : '박스'}</span>
-                            </td>
-                            <td class="px-6 py-2 text-xs text-gray-400 font-mono">${order.time}</td>
-                            <td class="px-6 py-2">
-                                <span class="px-3 py-1.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 whitespace-nowrap">편집중</span>
-                            </td>
-                            <td class="px-6 py-2 text-right">
-                                <button onclick="deleteRow(${order.id})" class="text-red-500 hover:text-red-700 flex items-center justify-end ml-auto" title="이 주문 삭제">
-                                    <span class="material-symbols-outlined text-lg">close</span>
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                } else {
-                    tr = `
-                        <tr class="hover:bg-gray-50 transition-colors h-16">
-                            <td class="px-6 py-4 font-bold text-sm text-gray-900">${order.buyerName}</td>
-                            <td class="px-6 py-4 text-sm text-gray-600">${item ? item.name : order.itemId}</td>
-                            <td class="px-6 py-4 text-sm font-semibold whitespace-nowrap">${order.qty} ${item ? item.unit : '박스'}</td>
-                            <td class="px-6 py-4 text-sm text-gray-400 font-mono">${order.time}</td>
-                            <td class="px-6 py-4">
-                                <select onchange="changeOrderStatus(${order.id}, this.value)" class="text-xs font-bold rounded-full pr-8 pl-3.5 py-1.5 border-0 outline-none focus:ring-0 appearance-none text-left ${statusColor} cursor-pointer bg-[right_0.5rem_center] bg-no-repeat bg-[length:12px_12px] min-w-[90px] whitespace-nowrap">
-                                    <option value="대기" ${order.status === '대기' ? 'selected' : ''}>대기</option>
-                                    <option value="승인" ${order.status === '승인' ? 'selected' : ''}>승인</option>
-                                    <option value="배송중" ${order.status === '배송중' ? 'selected' : ''}>배송중</option>
-                                    <option value="배송완료" ${order.status === '배송완료' ? 'selected' : ''}>배송완료</option>
-                                </select>
-                            </td>
-                            <td class="px-6 py-4 text-right text-gray-300">-</td>
-                        </tr>
-                    `;
+                if (approveOrdersBtn) {
+                    approveOrdersBtn.disabled = false;
+                    approveOrdersBtn.className = "flex items-center gap-2 px-6 h-12 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-md transition-all";
                 }
-                orderTableBody.insertAdjacentHTML("beforeend", tr);
-            });
 
-            priceTrackersContainer.innerHTML = "";
-            items.forEach(item => {
-                const itemTotal = BongBongCalculator.getItemTotalQty(item.id);
-                const statusText = item.isAvailable !== false
-                    ? `<p class="text-xs text-gray-400 mt-0.5">단가: ₩${item.basePrice.toLocaleString()} / ${item.unit}</p>`
-                    : `<p class="text-xs text-red-500 font-bold mt-0.5">일시 품절 (단가: ₩${item.basePrice.toLocaleString()})</p>`;
-                const trackerHtml = `
-                    <div class="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex justify-between items-center ${item.isAvailable === false ? 'opacity-60' : ''}">
-                        <div>
-                            <h4 class="font-bold text-gray-800 text-sm">${item.name}</h4>
-                            ${statusText}
+                // 승인 대기 주문 카드 정보 업데이트
+                const pendingOrders = orders.filter(o => o.status === "대기");
+                const pendingCount = pendingOrders.length;
+                const pendingQty = pendingOrders.reduce((sum, o) => sum + o.qty, 0);
+                
+                const pendingCountCounter = document.getElementById("pending-count-counter");
+                if (pendingCountCounter) pendingCountCounter.textContent = `${pendingCount} 건`;
+                
+                const pendingQtySub = document.getElementById("pending-qty-sub");
+                const pendingIcon = document.getElementById("kpi-pending-icon");
+                if (pendingQtySub) {
+                    if (pendingCount > 0) {
+                        pendingQtySub.textContent = `미승인 수량: ${pendingQty} 박스`;
+                        pendingQtySub.className = "text-xs font-bold text-red-500";
+                        if (pendingIcon) pendingIcon.className = "material-symbols-outlined text-red-500 animate-pulse";
+                    } else {
+                        pendingQtySub.textContent = "대기 중인 주문 없음";
+                        pendingQtySub.className = "text-xs font-semibold text-gray-400";
+                        if (pendingIcon) pendingIcon.className = "material-symbols-outlined text-primary";
+                    }
+                }
+
+                // 2. 총 주문량 계산
+                const totalQty = orders.reduce((sum, o) => sum + o.qty, 0);
+                if (totalQtyCounter) totalQtyCounter.textContent = totalQty.toLocaleString();
+
+                // 3. 현재 예상 매출 계산
+                const revenueVal = await BongBongCalculator.getProjectedRevenue();
+                projectedRevenue.textContent = `₩${revenueVal.toLocaleString()}`;
+
+                // 4. 주문 테이블 렌더링
+                orderTableBody.innerHTML = "";
+                orders.forEach(order => {
+                    const item = items.find(i => i.id === order.itemId);
+                    const statusColor = order.status === "대기" 
+                        ? "bg-blue-100 text-blue-700" 
+                        : order.status === "승인" 
+                        ? "bg-green-100 text-green-700" 
+                        : order.status === "배송중"
+                        ? "bg-yellow-100 text-yellow-700"
+                        : "bg-gray-100 text-gray-700";
+
+                    const isEditing = isBulkEditing;
+
+                    let tr = "";
+                    if (isEditing) {
+                        let itemOptions = "";
+                        items.forEach(i => {
+                            itemOptions += `<option value="${i.id}" ${i.id === order.itemId ? 'selected' : ''}>${i.name}</option>`;
+                        });
+
+                        tr = `
+                            <tr class="bg-blue-50/20 border-b border-blue-100 h-16" data-order-id="${order.id}">
+                                <td class="px-6 py-2">
+                                    <input type="text" id="edit-row-buyer-${order.id}" value="${order.buyerName}" class="w-full text-xs font-bold border-gray-200 rounded-xl p-1.5 focus:border-primary focus:ring-primary">
+                                </td>
+                                <td class="px-6 py-2">
+                                    <select id="edit-row-item-${order.id}" class="w-full text-xs border-gray-200 rounded-xl p-1.5 focus:border-primary focus:ring-primary">
+                                        ${itemOptions}
+                                    </select>
+                                </td>
+                                <td class="px-6 py-2 flex items-center gap-1 mt-1 border-0">
+                                    <input type="number" id="edit-row-qty-${order.id}" value="${order.qty}" min="1" class="w-16 text-xs font-semibold border-gray-200 rounded-xl p-1.5 focus:border-primary focus:ring-primary">
+                                    <span class="text-xs text-gray-500 font-bold">${item ? item.unit : '박스'}</span>
+                                </td>
+                                <td class="px-6 py-2 text-xs text-gray-400 font-mono">${order.time}</td>
+                                <td class="px-6 py-2">
+                                    <span class="px-3 py-1.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 whitespace-nowrap">편집중</span>
+                                </td>
+                                <td class="px-6 py-2 text-right">
+                                    <button onclick="deleteRow(${order.id})" class="text-red-500 hover:text-red-700 flex items-center justify-end ml-auto" title="이 주문 삭제">
+                                        <span class="material-symbols-outlined text-lg">close</span>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        tr = `
+                            <tr class="hover:bg-gray-50 transition-colors h-16">
+                                <td class="px-6 py-4 font-bold text-sm text-gray-900">${order.buyerName}</td>
+                                <td class="px-6 py-4 text-sm text-gray-600">${item ? item.name : order.itemId}</td>
+                                <td class="px-6 py-4 text-sm font-semibold whitespace-nowrap">${order.qty} ${item ? item.unit : '박스'}</td>
+                                <td class="px-6 py-4 text-sm text-gray-400 font-mono">${order.time}</td>
+                                <td class="px-6 py-4">
+                                    <select onchange="changeOrderStatus(${order.id}, this.value)" class="text-xs font-bold rounded-full pr-8 pl-3.5 py-1.5 border-0 outline-none focus:ring-0 appearance-none text-left ${statusColor} cursor-pointer bg-[right_0.5rem_center] bg-no-repeat bg-[length:12px_12px] min-w-[90px] whitespace-nowrap">
+                                        <option value="대기" ${order.status === '대기' ? 'selected' : ''}>대기</option>
+                                        <option value="승인" ${order.status === '승인' ? 'selected' : ''}>승인</option>
+                                        <option value="배송중" ${order.status === '배송중' ? 'selected' : ''}>배송중</option>
+                                        <option value="완료" ${order.status === '완료' ? 'selected' : ''}>완료</option>
+                                    </select>
+                                </td>
+                                <td class="px-6 py-4 text-right text-gray-300">-</td>
+                            </tr>
+                        `;
+                    }
+                    orderTableBody.insertAdjacentHTML("beforeend", tr);
+                });
+
+                // 누적 접수 수량 집계 최적화 (API 다중 호출 제거)
+                const itemTotalQtyMap = {};
+                orders.forEach(o => {
+                    itemTotalQtyMap[o.itemId] = (itemTotalQtyMap[o.itemId] || 0) + o.qty;
+                });
+
+                priceTrackersContainer.innerHTML = "";
+                items.forEach(item => {
+                    const itemTotal = itemTotalQtyMap[item.id] || 0;
+                    const statusText = item.isAvailable !== false
+                        ? `<p class="text-xs text-gray-400 mt-0.5">단가: ₩${item.basePrice.toLocaleString()} / ${item.unit}</p>`
+                        : `<p class="text-xs text-red-500 font-bold mt-0.5">일시 품절 (단가: ₩${item.basePrice.toLocaleString()})</p>`;
+                    const trackerHtml = `
+                        <div class="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex justify-between items-center ${item.isAvailable === false ? 'opacity-60' : ''}">
+                            <div>
+                                <h4 class="font-bold text-gray-800 text-sm">${item.name}</h4>
+                                ${statusText}
+                            </div>
+                            <div class="text-right">
+                                <span class="text-sm font-extrabold text-primary">${itemTotal} ${item.unit}</span>
+                                <p class="text-[10px] text-gray-400 font-bold mt-0.5">당일 누적 접수</p>
+                            </div>
                         </div>
-                        <div class="text-right">
-                            <span class="text-sm font-extrabold text-primary">${itemTotal} ${item.unit}</span>
-                            <p class="text-[10px] text-gray-400 font-bold mt-0.5">당일 누적 접수</p>
-                        </div>
-                    </div>
-                `;
-                priceTrackersContainer.insertAdjacentHTML("beforeend", trackerHtml);
-            });
+                    `;
+                    priceTrackersContainer.insertAdjacentHTML("beforeend", trackerHtml);
+                });
 
-            manualItemSelect.innerHTML = "";
-            items.forEach(i => {
-                const opt = document.createElement("option");
-                opt.value = i.id;
-                opt.textContent = i.name;
-                manualItemSelect.appendChild(opt);
-            });
-        }
+                manualItemSelect.innerHTML = "";
+                items.forEach(i => {
+                    const opt = document.createElement("option");
+                    opt.value = i.id;
+                    opt.textContent = i.name;
+                    manualItemSelect.appendChild(opt);
+                });
+            } catch (err) {
+                console.error("Dashboard render error:", err);
+            }
+        };
 
         addOrderBtn.addEventListener("click", () => {
             manualOrderModal.classList.remove("hidden");
         });
         closeModalBtn.addEventListener("click", () => manualOrderModal.classList.add("hidden"));
 
-        manualOrderForm.addEventListener("submit", (e) => {
+        manualOrderForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             const buyer = document.getElementById("manual-buyer-name").value.trim();
             const item = manualItemSelect.value;
@@ -915,29 +925,42 @@
 
             if (!buyer) return;
 
-            BongBongStore.addOrder(buyer, item, qty);
-            manualOrderModal.classList.add("hidden");
-            document.getElementById("manual-buyer-name").value = "";
-            renderAdminDashboard();
+            try {
+                await BongBongStore.addOrder(buyer, item, qty);
+                manualOrderModal.classList.add("hidden");
+                document.getElementById("manual-buyer-name").value = "";
+                await renderAdminDashboard();
+            } catch (err) {
+                console.error("Manual order creation failed:", err);
+                if (err.errors) {
+                    alert(err.errors.map(e => e.message).join("\n"));
+                } else {
+                    alert("주문 등록에 실패했습니다.");
+                }
+            }
         });
 
-        approveOrdersBtn.addEventListener("click", () => {
-            const orders = BongBongStore.getOrders();
-            const pendingOrders = orders.filter(o => o.status === "대기");
+        approveOrdersBtn.addEventListener("click", async () => {
+            try {
+                const orders = await BongBongStore.getOrders();
+                const pendingOrders = orders.filter(o => o.status === "대기");
 
-            if (pendingOrders.length === 0) {
-                alert("승인 대기 중인 주문이 없습니다.");
-                return;
-            }
+                if (pendingOrders.length === 0) {
+                    alert("승인 대기 중인 주문이 없습니다.");
+                    return;
+                }
 
-            if (confirm(`현재 대기 중인 ${pendingOrders.length}건의 주문을 일괄 승인하시겠습니까?`)) {
-                orders.forEach(o => {
-                    if (o.status === "대기") o.status = "승인";
-                });
-                BongBongStore.saveOrders(orders);
-                renderAdminDashboard();
-                BongBongStore.dispatchStorageChange();
-                alert(`${pendingOrders.length}건의 주문이 최종 승인되었습니다.`);
+                if (confirm(`현재 대기 중인 ${pendingOrders.length}건의 주문을 일괄 승인하시겠습니까?`)) {
+                    orders.forEach(o => {
+                        if (o.status === "대기") o.status = "승인";
+                    });
+                    await BongBongStore.saveOrders(orders);
+                    await renderAdminDashboard();
+                    alert(`${pendingOrders.length}건의 주문이 최종 승인되었습니다.`);
+                }
+            } catch (err) {
+                console.error("Bulk approval failed:", err);
+                alert("일괄 승인 중 오류가 발생했습니다.");
             }
         });
 
@@ -948,94 +971,97 @@
         const previewChatBody = document.getElementById("preview-chat-body");
         const previewCount = document.getElementById("preview-count");
 
-        sendSettleBtn.addEventListener("click", () => {
+        sendSettleBtn.addEventListener("click", async () => {
+            try {
+                const items = await BongBongStore.getItems();
+                const orders = await BongBongStore.getOrders();
+                
+                // 1. 거래처별 + 품목별 수량 집계
+                const buyerSummary = {};
+                orders.forEach(o => {
+                    if (!buyerSummary[o.buyerName]) {
+                        buyerSummary[o.buyerName] = {};
+                    }
+                    if (!buyerSummary[o.buyerName][o.itemId]) {
+                        buyerSummary[o.buyerName][o.itemId] = 0;
+                    }
+                    buyerSummary[o.buyerName][o.itemId] += o.qty;
+                });
 
-            const items = BongBongStore.getItems();
-            const orders = BongBongStore.getOrders();
-            
-            // 1. 거래처별 + 품목별 수량 집계
-            const buyerSummary = {};
-            orders.forEach(o => {
-                if (!buyerSummary[o.buyerName]) {
-                    buyerSummary[o.buyerName] = {};
-                }
-                if (!buyerSummary[o.buyerName][o.itemId]) {
-                    buyerSummary[o.buyerName][o.itemId] = 0;
-                }
-                buyerSummary[o.buyerName][o.itemId] += o.qty;
-            });
-
-            const buyersList = Object.keys(buyerSummary);
-            if (buyersList.length === 0) {
-                alert("오늘 접수된 발주 건이 없어 정산 알림을 발송할 수 없습니다.");
-                return;
-            }
-
-            // 2. 알림톡 프리뷰 빌드
-            previewChatBody.innerHTML = "";
-            previewCount.textContent = buyersList.length.toString();
-
-            const todayStr = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
-
-            buyersList.forEach(buyer => {
-                const itemQtyMap = buyerSummary[buyer];
-                let totalBill = 0;
-                let itemsDetailHtml = "";
-
-                for (const [itemId, totalQty] of Object.entries(itemQtyMap)) {
-                    const item = items.find(i => i.id === itemId);
-                    if (!item) continue;
-                    const finalPrice = BongBongCalculator.getWholesaleUnitPrice(item, totalQty);
-                    const subtotal = totalQty * finalPrice;
-                    
-                    itemsDetailHtml += `<p class="flex justify-between"><span>• ${item.name} (${totalQty}${item.unit})</span><span>₩${subtotal.toLocaleString()}</span></p>`;
-                    totalBill += subtotal;
+                const buyersList = Object.keys(buyerSummary);
+                if (buyersList.length === 0) {
+                    alert("오늘 접수된 발주 건이 없어 정산 알림을 발송할 수 없습니다.");
+                    return;
                 }
 
-                const bubbleHtml = `
-                    <div class="flex items-start gap-2.5 max-w-[92%]">
-                        <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center font-extrabold text-[10px] shrink-0 shadow-sm text-primary border border-gray-100 font-serif">
-                            별미
-                        </div>
-                        <div class="flex flex-col gap-1.5 text-left">
-                            <span class="text-[10px] text-gray-500 font-bold ml-1">별미집 알림톡</span>
-                            <!-- Kakao Bubble -->
-                            <div class="bg-white rounded-2xl rounded-tl-none border border-gray-200/80 shadow-sm overflow-hidden flex flex-col text-xs max-w-sm">
-                                <!-- Header -->
-                                <div class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                                    <span class="font-bold text-gray-800 flex items-center gap-1.5">
-                                        <span class="material-symbols-outlined text-sm text-secondary font-bold">check_circle</span>
-                                        [별미집] 정산 요청 안내
-                                    </span>
-                                    <span class="text-[9px] bg-gray-200 text-gray-500 font-bold px-1.5 py-0.5 rounded">알림톡</span>
+                // 2. 알림톡 프리뷰 빌드
+                previewChatBody.innerHTML = "";
+                previewCount.textContent = buyersList.length.toString();
+
+                const todayStr = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
+
+                buyersList.forEach(buyer => {
+                    const itemQtyMap = buyerSummary[buyer];
+                    let totalBill = 0;
+                    let itemsDetailHtml = "";
+
+                    for (const [itemId, totalQty] of Object.entries(itemQtyMap)) {
+                        const item = items.find(i => i.id === itemId);
+                        if (!item) continue;
+                        const finalPrice = BongBongCalculator.getWholesaleUnitPrice(item, totalQty);
+                        const subtotal = totalQty * finalPrice;
+                        
+                        itemsDetailHtml += `<p class="flex justify-between"><span>• ${item.name} (${totalQty}${item.unit})</span><span>₩${subtotal.toLocaleString()}</span></p>`;
+                        totalBill += subtotal;
+                    }
+
+                    const bubbleHtml = `
+                        <div class="flex items-start gap-2.5 max-w-[92%]">
+                            <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center font-extrabold text-[10px] shrink-0 shadow-sm text-primary border border-gray-100 font-serif">
+                                별미
+                            </div>
+                            <div class="flex flex-col gap-1.5 text-left">
+                                <span class="text-[10px] text-gray-500 font-bold ml-1">별미집 알림톡</span>
+                                <!-- Kakao Bubble -->
+                                <div class="bg-white rounded-2xl rounded-tl-none border border-gray-200/80 shadow-sm overflow-hidden flex flex-col text-xs max-w-sm">
+                                    <!-- Header -->
+                                    <div class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                                        <span class="font-bold text-gray-800 flex items-center gap-1.5">
+                                            <span class="material-symbols-outlined text-sm text-secondary font-bold">check_circle</span>
+                                            [별미집] 정산 요청 안내
+                                        </span>
+                                        <span class="text-[9px] bg-gray-200 text-gray-500 font-bold px-1.5 py-0.5 rounded">알림톡</span>
+                                    </div>
+                                    <!-- Body -->
+                                    <div class="p-4 space-y-3 text-gray-700 leading-relaxed font-sans">
+                                        <p>안녕하세요, <strong>${buyer} 대표님</strong>.<br>금일(${todayStr}) 별미집 도매 발주에 대한 정산 명세서가 발행되었습니다.</p>
+                                        <div class="bg-gray-50 p-3 rounded-xl border border-gray-100/80 space-y-1 text-[11px] font-semibold text-gray-600">
+                                            ${itemsDetailHtml}
+                                        </div>
+                                        <div class="flex justify-between items-center pt-1">
+                                            <span class="font-bold text-xs text-gray-500">최종 청구 금액</span>
+                                            <span class="text-sm font-extrabold text-red-600">₩${totalBill.toLocaleString()}</span>
+                                        </div>
+                                        <div class="text-[10px] text-gray-400 pt-2 border-t border-dashed border-gray-200 space-y-0.5">
+                                            <p>🏦 계좌: 국민은행 646801-01-557728 (김봉준 우모유통)</p>
+                                            <p>※ 대표자명 또는 업체명으로 입금해 주시기 바랍니다.</p>
+                                        </div>
+                                    </div>
+                                    <!-- Action Button -->
+                                    <a href="invoice.html?buyer=${encodeURIComponent(buyer)}" target="_blank" class="block w-full py-3.5 bg-gray-50 hover:bg-gray-100 border-t border-gray-100 text-center font-bold text-gray-800 text-[11px] hover:text-secondary transition-colors">
+                                        상세 정산 명세서 보기
+                                    </a>
                                 </div>
-                                <!-- Body -->
-                                <div class="p-4 space-y-3 text-gray-700 leading-relaxed font-sans">
-                                    <p>안녕하세요, <strong>${buyer} 대표님</strong>.<br>금일(${todayStr}) 별미집 도매 발주에 대한 정산 명세서가 발행되었습니다.</p>
-                                    <div class="bg-gray-50 p-3 rounded-xl border border-gray-100/80 space-y-1 text-[11px] font-semibold text-gray-600">
-                                        ${itemsDetailHtml}
-                                    </div>
-                                    <div class="flex justify-between items-center pt-1">
-                                        <span class="font-bold text-xs text-gray-500">최종 청구 금액</span>
-                                        <span class="text-sm font-extrabold text-red-600">₩${totalBill.toLocaleString()}</span>
-                                    </div>
-                                    <div class="text-[10px] text-gray-400 pt-2 border-t border-dashed border-gray-200 space-y-0.5">
-                                        <p>🏦 계좌: 국민은행 646801-01-557728 (김봉준 우모유통)</p>
-                                        <p>※ 대표자명 또는 업체명으로 입금해 주시기 바랍니다.</p>
-                                    </div>
-                                </div>
-                                <!-- Action Button -->
-                                <a href="invoice.html?buyer=${encodeURIComponent(buyer)}" target="_blank" class="block w-full py-3.5 bg-gray-50 hover:bg-gray-100 border-t border-gray-100 text-center font-bold text-gray-800 text-[11px] hover:text-secondary transition-colors">
-                                    상세 정산 명세서 보기
-                                </a>
                             </div>
                         </div>
-                    </div>
-                `;
-                previewChatBody.insertAdjacentHTML("beforeend", bubbleHtml);
-            });
+                    `;
+                    previewChatBody.insertAdjacentHTML("beforeend", bubbleHtml);
+                });
 
-            kakaoPreviewModal.classList.remove("hidden");
+                kakaoPreviewModal.classList.remove("hidden");
+            } catch (err) {
+                console.error("Alimtalk preview generation failed:", err);
+            }
         });
 
         // 닫기 및 취소
@@ -1049,14 +1075,18 @@
         });
 
         renderAdminDashboard();
-        setInterval(renderAdminDashboard, 3000);
-        window.addEventListener('storage', renderAdminDashboard);
+        setInterval(async () => {
+            await renderAdminDashboard();
+        }, 3000);
+        window.addEventListener('storage', async () => {
+            await renderAdminDashboard();
+        });
     });
 
     let salesChartInstance = null;
     let shareChartInstance = null;
 
-    function switchTab(tabId) {
+    async function switchTab(tabId) {
         const dashboardTab = document.getElementById("dashboard-tab");
         const analyticsTab = document.getElementById("analytics-tab");
         const productsTab = document.getElementById("products-tab");
@@ -1078,82 +1108,86 @@
         } else if (tabId === 'analytics') {
             analyticsTab.classList.remove("hidden");
             menuAnalytics.className = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-primary border-r-4 border-primary bg-white/80 font-bold text-left transition-all";
-            renderAnalyticsBoard();
+            await renderAnalyticsBoard();
         } else if (tabId === 'products') {
             productsTab.classList.remove("hidden");
             menuProducts.className = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-primary border-r-4 border-primary bg-white/80 font-bold text-left transition-all";
-            renderModalProductList();
+            await renderModalProductList();
             initNewProductForm();
         }
     }
 
-    function renderAnalyticsBoard() {
-        const data = BongBongStore.getAnalyticsData();
-        const tbody = document.getElementById("analytics-buyers-body");
-        tbody.innerHTML = "";
-        
-        // 오늘 실시간 데이터 합산 반영
-        const todayRevenue = BongBongCalculator.getProjectedRevenue();
-        const orders = BongBongStore.getOrders();
-        const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
+    async function renderAnalyticsBoard() {
+        try {
+            const data = BongBongStore.getAnalyticsData();
+            const tbody = document.getElementById("analytics-buyers-body");
+            tbody.innerHTML = "";
+            
+            // 오늘 실시간 데이터 합산 반영
+            const todayRevenue = await BongBongCalculator.getProjectedRevenue();
+            const orders = await BongBongStore.getOrders();
+            const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
 
-        const baseMonthlySales = 32450000;
-        const baseMonthlyVolume = 1540;
+            const baseMonthlySales = 32450000;
+            const baseMonthlyVolume = 1540;
 
-        const totalSalesVal = baseMonthlySales + todayRevenue;
-        const totalVolumeVal = baseMonthlyVolume + todayVolume;
+            const totalSalesVal = baseMonthlySales + todayRevenue;
+            const totalVolumeVal = baseMonthlyVolume + todayVolume;
 
-        document.getElementById("kpi-total-sales").textContent = `₩${totalSalesVal.toLocaleString()}`;
-        document.getElementById("kpi-total-volume").textContent = `${totalVolumeVal.toLocaleString()} 박스`;
+            document.getElementById("kpi-total-sales").textContent = `₩${totalSalesVal.toLocaleString()}`;
+            document.getElementById("kpi-total-volume").textContent = `${totalVolumeVal.toLocaleString()} 박스`;
 
-        // 1. 평균 주문 객단가 동적 계산
-        const baseOrderCount = 76;
-        const totalOrderCount = baseOrderCount + orders.length;
-        const avgTicketVal = Math.round(totalSalesVal / totalOrderCount);
-        document.getElementById("kpi-avg-ticket").textContent = `₩${avgTicketVal.toLocaleString()}`;
-        document.getElementById("kpi-avg-ticket-sub").textContent = `총 ${totalOrderCount}건 주문 기준`;
+            // 1. 평균 주문 객단가 동적 계산
+            const baseOrderCount = 76;
+            const totalOrderCount = baseOrderCount + orders.length;
+            const avgTicketVal = Math.round(totalSalesVal / totalOrderCount);
+            document.getElementById("kpi-avg-ticket").textContent = `₩${avgTicketVal.toLocaleString()}`;
+            document.getElementById("kpi-avg-ticket-sub").textContent = `총 ${totalOrderCount}건 주문 기준`;
 
-        // 2. 당월 활성 거래처 및 신규 거래처 동적 계산
-        const existingBuyerNames = new Set(data.buyers.map(b => b.name));
-        const todayBuyerNames = new Set(orders.map(o => o.buyerName));
-        const allBuyers = new Set([...existingBuyerNames, ...todayBuyerNames]);
-        let newBuyersCount = 0;
-        todayBuyerNames.forEach(name => {
-            if (!existingBuyerNames.has(name)) newBuyersCount++;
-        });
-        document.getElementById("kpi-active-buyers").textContent = `${allBuyers.size} 개처`;
-        document.getElementById("kpi-active-buyers-sub").textContent = `신규 ${newBuyersCount}개처 추가`;
+            // 2. 당월 활성 거래처 및 신규 거래처 동적 계산
+            const existingBuyerNames = new Set(data.buyers.map(b => b.name));
+            const todayBuyerNames = new Set(orders.map(o => o.buyerName));
+            const allBuyers = new Set([...existingBuyerNames, ...todayBuyerNames]);
+            let newBuyersCount = 0;
+            todayBuyerNames.forEach(name => {
+                if (!existingBuyerNames.has(name)) newBuyersCount++;
+            });
+            document.getElementById("kpi-active-buyers").textContent = `${allBuyers.size} 개처`;
+            document.getElementById("kpi-active-buyers-sub").textContent = `신규 ${newBuyersCount}개처 추가`;
 
-        data.buyers.forEach(buyer => {
-            const isNormal = buyer.status === "정상";
-            const selectColor = isNormal 
-                ? "bg-green-50 text-green-700 border-green-200" 
-                : "bg-red-50 text-red-700 border-red-200";
+            data.buyers.forEach(buyer => {
+                const isNormal = buyer.status === "정상";
+                const selectColor = isNormal 
+                    ? "bg-green-50 text-green-700 border-green-200" 
+                    : "bg-red-50 text-red-700 border-red-200";
 
-            const tr = `
-                <tr class="hover:bg-gray-50 transition-colors h-14">
-                    <td class="px-6 py-4 font-bold text-gray-900">${buyer.name}</td>
-                    <td class="px-6 py-4 text-gray-600">${buyer.mainItem}</td>
-                    <td class="px-6 py-4 font-semibold">${buyer.qty} 박스</td>
-                    <td class="px-6 py-4 font-bold text-primary">₩${buyer.revenue.toLocaleString()}</td>
-                    <td class="px-6 py-4">
-                        <select onchange="changeBuyerStatus('${buyer.name}', this.value)" class="text-xs font-bold rounded-full px-3 py-1.5 border border-gray-200 outline-none focus:ring-0 bg-none appearance-none text-center ${selectColor} cursor-pointer pr-3 pl-3">
-                            <option value="정상" ${isNormal ? 'selected' : ''}>정상 (수금완료)</option>
-                            <option value="미수금_입력" ${!isNormal ? 'selected' : ''}>
-                                ${isNormal ? '미수금 등록...' : '미수금 (' + buyer.status.replace('미수금', '').trim() + ')'}
-                            </option>
-                        </select>
-                    </td>
-                </tr>
-            `;
-            tbody.insertAdjacentHTML("beforeend", tr);
-        });
+                const tr = `
+                    <tr class="hover:bg-gray-50 transition-colors h-14">
+                        <td class="px-6 py-4 font-bold text-gray-900">${buyer.name}</td>
+                        <td class="px-6 py-4 text-gray-600">${buyer.mainItem}</td>
+                        <td class="px-6 py-4 font-semibold">${buyer.qty} 박스</td>
+                        <td class="px-6 py-4 font-bold text-primary">₩${buyer.revenue.toLocaleString()}</td>
+                        <td class="px-6 py-4">
+                            <select onchange="changeBuyerStatus('${buyer.name}', this.value)" class="text-xs font-bold rounded-full px-3 py-1.5 border border-gray-200 outline-none focus:ring-0 bg-none appearance-none text-center ${selectColor} cursor-pointer pr-3 pl-3">
+                                <option value="정상" ${isNormal ? 'selected' : ''}>정상 (수금완료)</option>
+                                <option value="미수금_입력" ${!isNormal ? 'selected' : ''}>
+                                    ${isNormal ? '미수금 등록...' : '미수금 (' + buyer.status.replace('미수금', '').trim() + ')'}
+                                </option>
+                            </select>
+                        </td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML("beforeend", tr);
+            });
 
-        buildSalesTrendChart('monthly');
-        buildProductShareChart();
+            buildSalesTrendChart('monthly');
+            buildProductShareChart();
+        } catch (err) {
+            console.error("Failed to render analytics board:", err);
+        }
     }
 
-    window.changeBuyerStatus = function(buyerName, selectValue) {
+    window.changeBuyerStatus = async function(buyerName, selectValue) {
         if (selectValue === "미수금_입력") {
             const currentData = BongBongStore.getAnalyticsBuyers();
             const buyer = currentData.find(b => b.name === buyerName);
@@ -1162,7 +1196,7 @@
             
             const moneyInput = prompt(`[${buyerName}]의 미수금액을 입력하세요:`, currentPrice);
             if (moneyInput === null) {
-                renderAnalyticsBoard();
+                await renderAnalyticsBoard();
                 return;
             }
             const cleanMoney = moneyInput.trim();
@@ -1175,7 +1209,7 @@
         } else {
             BongBongStore.updateBuyerStatus(buyerName, "정상");
         }
-        renderAnalyticsBoard();
+        await renderAnalyticsBoard();
     };
 
     window.updateChartType = function(period) {
@@ -1299,36 +1333,40 @@
     const productEditorForm = document.getElementById("product-editor-form");
     const deleteProductBtn = document.getElementById("delete-product-btn");
 
-    function renderModalProductList() {
-        const items = BongBongStore.getItems();
-        modalProductList.innerHTML = "";
-        items.forEach(item => {
-            const statusBadge = item.isAvailable !== false 
-                ? `<span class="text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">공급 중</span>` 
-                : `<span class="text-[10px] text-red-600 font-bold bg-red-50 px-1.5 py-0.5 rounded">일시 품절</span>`;
-            
-            let tiersText = "";
-            if (item.tiers && item.tiers.length > 0) {
-                const innerTiers = item.tiers.map(t => `
-                    <span class="inline-flex items-center text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded-md font-bold shrink-0">
-                        ${t.threshold}${item.unit}↑ ₩${t.price.toLocaleString()}
-                    </span>
-                `).join('');
-                tiersText = `<div class="flex flex-wrap gap-1 mt-2">${innerTiers}</div>`;
-            }
+    async function renderModalProductList() {
+        try {
+            const items = await BongBongStore.getItems();
+            modalProductList.innerHTML = "";
+            items.forEach(item => {
+                const statusBadge = item.isAvailable !== false 
+                    ? `<span class="text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">공급 중</span>` 
+                    : `<span class="text-[10px] text-red-600 font-bold bg-red-50 px-1.5 py-0.5 rounded">일시 품절</span>`;
+                
+                let tiersText = "";
+                if (item.tiers && item.tiers.length > 0) {
+                    const innerTiers = item.tiers.map(t => `
+                        <span class="inline-flex items-center text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded-md font-bold shrink-0">
+                            ${t.threshold}${item.unit}↑ ₩${t.price.toLocaleString()}
+                        </span>
+                    `).join('');
+                    tiersText = `<div class="flex flex-wrap gap-1 mt-2">${innerTiers}</div>`;
+                }
 
-            const div = `
-                <div onclick="loadProductToEditor('${item.id}')" class="p-3 bg-gray-50 hover:bg-gray-100 rounded-xl cursor-pointer transition-all border border-transparent hover:border-gray-200">
-                    <div class="flex justify-between items-center">
-                        <h5 class="font-bold text-xs text-gray-800">${item.name}</h5>
-                        ${statusBadge}
+                const div = `
+                    <div onclick="loadProductToEditor('${item.id}')" class="p-3 bg-gray-50 hover:bg-gray-100 rounded-xl cursor-pointer transition-all border border-transparent hover:border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <h5 class="font-bold text-xs text-gray-800">${item.name}</h5>
+                            ${statusBadge}
+                        </div>
+                        <p class="text-[10px] text-gray-400 mt-1">도매단가: ₩${item.basePrice.toLocaleString()} / 단위: ${item.unit}</p>
+                        ${tiersText}
                     </div>
-                    <p class="text-[10px] text-gray-400 mt-1">도매단가: ₩${item.basePrice.toLocaleString()} / 단위: ${item.unit}</p>
-                    ${tiersText}
-                </div>
-            `;
-            modalProductList.insertAdjacentHTML("beforeend", div);
-        });
+                `;
+                modalProductList.insertAdjacentHTML("beforeend", div);
+            });
+        } catch (err) {
+            console.error("Failed to render modal product list:", err);
+        }
     }
 
     function initNewProductForm() {
@@ -1340,37 +1378,45 @@
         deleteProductBtn.classList.add("hidden");
     }
 
-    function loadProductToEditor(productId) {
-        const items = BongBongStore.getItems();
-        const item = items.find(i => i.id === productId);
-        if (!item) return;
+    async function loadProductToEditor(productId) {
+        try {
+            const items = await BongBongStore.getItems();
+            const item = items.find(i => i.id === productId);
+            if (!item) return;
 
-        document.getElementById("edit-product-id").value = item.id;
-        document.getElementById("edit-product-name").value = item.name;
-        document.getElementById("edit-product-category").value = item.category;
-        document.getElementById("edit-product-base-price").value = item.basePrice;
-        document.getElementById("edit-product-unit").value = item.unit;
-        document.getElementById("edit-product-status").value = (item.isAvailable !== false).toString();
+            document.getElementById("edit-product-id").value = item.id;
+            document.getElementById("edit-product-name").value = item.name;
+            document.getElementById("edit-product-category").value = item.category;
+            document.getElementById("edit-product-base-price").value = item.basePrice;
+            document.getElementById("edit-product-unit").value = item.unit;
+            document.getElementById("edit-product-status").value = (item.isAvailable !== false).toString();
 
-        const tiersContainer = document.getElementById("editor-tiers-container");
-        tiersContainer.innerHTML = "";
-        if (item.tiers && item.tiers.length > 0) {
-            item.tiers.forEach(t => {
-                addTierInputRow(t.threshold, t.price);
-            });
-        }
-
-        updateTiersPreview();
-
-        deleteProductBtn.classList.remove("hidden");
-        deleteProductBtn.onclick = () => {
-            if(confirm(`[${item.name}] 품목을 정말 삭제하시겠습니까?`)) {
-                BongBongStore.deleteItem(item.id);
-                renderModalProductList();
-                initNewProductForm();
-                renderAdminDashboard();
+            const tiersContainer = document.getElementById("editor-tiers-container");
+            tiersContainer.innerHTML = "";
+            if (item.tiers && item.tiers.length > 0) {
+                item.tiers.forEach(t => {
+                    addTierInputRow(t.threshold, t.price);
+                });
             }
-        };
+
+            updateTiersPreview();
+
+            deleteProductBtn.classList.remove("hidden");
+            deleteProductBtn.onclick = async () => {
+                if(confirm(`[${item.name}] 품목을 정말 삭제하시겠습니까?`)) {
+                    try {
+                        await BongBongStore.deleteItem(item.id);
+                        await renderModalProductList();
+                        initNewProductForm();
+                        await renderAdminDashboard();
+                    } catch (err) {
+                        alert("삭제에 실패했습니다.");
+                    }
+                }
+            };
+        } catch (err) {
+            console.error("Failed to load product to editor:", err);
+        }
     }
 
     // 구간 단가 실시간 프리뷰 업데이트
@@ -1469,7 +1515,7 @@
     }
 
     // 폼 저장 버튼 핸들러
-    productEditorForm.addEventListener("submit", (e) => {
+    productEditorForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         
         const productId = document.getElementById("edit-product-id").value;
@@ -1503,14 +1549,14 @@
 
         try {
             if (productId) {
-                BongBongStore.updateItem(productId, targetProduct);
+                await BongBongStore.updateItem(productId, targetProduct);
             } else {
-                BongBongStore.addItem(targetProduct);
+                await BongBongStore.addItem(targetProduct);
             }
 
-            renderModalProductList();
+            await renderModalProductList();
             initNewProductForm();
-            renderAdminDashboard();
+            await renderAdminDashboard();
             alert("품목 설정이 정상적으로 저장되었습니다.");
         } catch (error) {
             console.error("품목 저장 에러:", error);
@@ -1526,66 +1572,75 @@
     document.getElementById("edit-product-base-price").addEventListener("input", updateTiersPreview);
     document.getElementById("edit-product-unit").addEventListener("input", updateTiersPreview);
 
-    window.changeOrderStatus = function(orderId, newStatus) {
-        BongBongStore.updateOrderStatus(orderId, newStatus);
-        renderAdminDashboard();
+    window.changeOrderStatus = async function(orderId, newStatus) {
+        try {
+            await BongBongStore.updateOrderStatus(orderId, newStatus);
+            await renderAdminDashboard();
+        } catch (err) {
+            alert("상태 수정에 실패했습니다.");
+        }
     };
 
-    window.toggleBulkEdit = function(active) {
+    window.toggleBulkEdit = async function(active) {
         if (!active) {
-            // 완료를 눌러 저장을 시도하는 경우
-            const orders = BongBongStore.getOrders();
-            const updatedOrders = [];
-            let hasError = false;
+            try {
+                const orders = await BongBongStore.getOrders();
+                const updatedOrders = [];
+                let hasError = false;
 
-            for (let i = 0; i < orders.length; i++) {
-                const order = orders[i];
-                const buyerInput = document.getElementById(`edit-row-buyer-${order.id}`);
-                const itemSelect = document.getElementById(`edit-row-item-${order.id}`);
-                const qtyInput = document.getElementById(`edit-row-qty-${order.id}`);
+                for (let i = 0; i < orders.length; i++) {
+                    const order = orders[i];
+                    const buyerInput = document.getElementById(`edit-row-buyer-${order.id}`);
+                    const itemSelect = document.getElementById(`edit-row-item-${order.id}`);
+                    const qtyInput = document.getElementById(`edit-row-qty-${order.id}`);
 
-                if (buyerInput && itemSelect && qtyInput) {
-                    const buyerName = buyerInput.value.trim();
-                    const itemId = itemSelect.value;
-                    const qty = parseInt(qtyInput.value, 10);
+                    if (buyerInput && itemSelect && qtyInput) {
+                        const buyerName = buyerInput.value.trim();
+                        const itemId = itemSelect.value;
+                        const qty = parseInt(qtyInput.value, 10);
 
-                    if (!buyerName || isNaN(qty) || qty < 1) {
-                        hasError = true;
-                        break;
+                        if (!buyerName || isNaN(qty) || qty < 1) {
+                            hasError = true;
+                            break;
+                        }
+
+                        updatedOrders.push({
+                            ...order,
+                            buyerName,
+                            itemId,
+                            qty
+                        });
+                    } else {
+                        updatedOrders.push(order);
                     }
-
-                    updatedOrders.push({
-                        ...order,
-                        buyerName,
-                        itemId,
-                        qty
-                    });
-                } else {
-                    updatedOrders.push(order);
                 }
-            }
 
-            if (hasError) {
-                alert("구매자명과 올바른 수량(1개 이상)을 입력해 주세요.");
+                if (hasError) {
+                    alert("구매자명과 올바른 수량(1개 이상)을 입력해 주세요.");
+                    return;
+                }
+
+                // 일괄 저장 실행
+                await BongBongStore.saveOrders(updatedOrders);
+            } catch (err) {
+                console.error("Bulk save failed:", err);
+                alert("일괄 편집 저장에 실패했습니다.");
                 return;
             }
-
-            // 일괄 저장 실행
-            BongBongStore.saveOrders(updatedOrders);
-            // 강제 리렌더링 허용을 위해 renderAdminDashboard(true)를 수동 트리거하고 storage 이벤트를 발생시킴
-            BongBongStore.dispatchStorageChange();
         }
 
         isBulkEditing = active;
-        // renderAdminDashboard(true)를 전달하여 강제 리렌더링 수행
-        renderAdminDashboard(true);
+        await renderAdminDashboard(true);
     };
 
-    window.deleteRow = function(orderId) {
+    window.deleteRow = async function(orderId) {
         if (confirm("이 주문을 정말 삭제하시겠습니까?")) {
-            BongBongStore.deleteOrder(orderId);
-            // 삭제 후에는 즉각 리렌더링되도록 강제 주입
-            renderAdminDashboard(true);
+            try {
+                await BongBongStore.deleteOrder(orderId);
+                await renderAdminDashboard(true);
+            } catch (err) {
+                alert("삭제에 실패했습니다.");
+            }
         }
     };
 
@@ -1594,262 +1649,282 @@
         document.getElementById(modalId).classList.add("hidden");
     };
 
-    window.openSalesDetailModal = function() {
-        const data = BongBongStore.getAnalyticsData();
-        const orders = BongBongStore.getOrders();
-        const todayRevenue = BongBongCalculator.getProjectedRevenue();
-        const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
+    window.openSalesDetailModal = async function() {
+        try {
+            const data = BongBongStore.getAnalyticsData();
+            const orders = await BongBongStore.getOrders();
+            const todayRevenue = await BongBongCalculator.getProjectedRevenue();
+            const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
 
-        const baseMonthlySales = 32450000;
-        const totalSalesVal = baseMonthlySales + todayRevenue;
+            const baseMonthlySales = 32450000;
+            const totalSalesVal = baseMonthlySales + todayRevenue;
 
-        document.getElementById("modal-sales-total-sales").textContent = `₩${totalSalesVal.toLocaleString()}`;
-        document.getElementById("modal-sales-today-sales").textContent = `+₩${todayRevenue.toLocaleString()}`;
+            document.getElementById("modal-sales-total-sales").textContent = `₩${totalSalesVal.toLocaleString()}`;
+            document.getElementById("modal-sales-today-sales").textContent = `+₩${todayRevenue.toLocaleString()}`;
 
-        const tbody = document.getElementById("modal-sales-table-body");
-        tbody.innerHTML = "";
+            const tbody = document.getElementById("modal-sales-table-body");
+            tbody.innerHTML = "";
 
-        const monthlyLen = data.monthly.labels.length;
-        for (let i = monthlyLen - 1; i >= 0; i--) {
-            const isCurrentMonth = data.monthly.labels[i] === "5월";
-            const sales = isCurrentMonth ? totalSalesVal : data.monthly.sales[i];
-            const volume = isCurrentMonth ? (data.monthly.volumes[i] + todayVolume) : data.monthly.volumes[i];
-            tbody.insertAdjacentHTML("beforeend", `
-                <tr class="${isCurrentMonth ? 'bg-blue-50/50 font-bold' : ''}">
-                    <td class="px-4 py-2.5">${data.monthly.labels[i]} 누적</td>
-                    <td class="px-4 py-2.5 text-right font-bold text-primary">₩${sales.toLocaleString()}</td>
-                    <td class="px-4 py-2.5 text-right">${volume.toLocaleString()} 박스</td>
-                </tr>
-            `);
-        }
-
-        document.getElementById("sales-detail-modal").classList.remove("hidden");
-    };
-
-    window.openVolumeDetailModal = function() {
-        const items = BongBongStore.getItems();
-        const orders = BongBongStore.getOrders();
-        const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
-        const baseMonthlyVolume = 1540;
-        const totalVolumeVal = baseMonthlyVolume + todayVolume;
-
-        document.getElementById("modal-volume-total-qty").textContent = `${totalVolumeVal.toLocaleString()} 박스`;
-        document.getElementById("modal-volume-today-qty").textContent = `+${todayVolume.toLocaleString()} 박스`;
-
-        const tbody = document.getElementById("modal-volume-table-body");
-        tbody.innerHTML = "";
-
-        const baseProductVolumes = {
-            "potato": Math.round(baseMonthlyVolume * 0.55),
-            "garlic": Math.round(baseMonthlyVolume * 0.20),
-            "onion": Math.round(baseMonthlyVolume * 0.15),
-            "other": Math.round(baseMonthlyVolume * 0.10)
-        };
-
-        const todayProductVolumes = {};
-        orders.forEach(o => {
-            todayProductVolumes[o.itemId] = (todayProductVolumes[o.itemId] || 0) + o.qty;
-        });
-
-        items.forEach(item => {
-            const baseVol = baseProductVolumes[item.id] || 0;
-            const todayVol = todayProductVolumes[item.id] || 0;
-            const totalVol = baseVol + todayVol;
-            tbody.insertAdjacentHTML("beforeend", `
-                <tr>
-                    <td class="px-4 py-2.5 font-bold">${item.name}</td>
-                    <td class="px-4 py-2.5 text-right font-semibold text-primary">${totalVol.toLocaleString()} ${item.unit}</td>
-                </tr>
-            `);
-        });
-
-        const otherBase = baseProductVolumes["other"] || 0;
-        let otherToday = 0;
-        orders.forEach(o => {
-            if (!items.find(i => i.id === o.itemId)) {
-                otherToday += o.qty;
-            }
-        });
-        if (otherBase + otherToday > 0) {
-            tbody.insertAdjacentHTML("beforeend", `
-                <tr>
-                    <td class="px-4 py-2.5 font-bold text-gray-500">기타 품목</td>
-                    <td class="px-4 py-2.5 text-right font-semibold text-gray-600">${(otherBase + otherToday).toLocaleString()} 박스</td>
-                </tr>
-            `);
-        }
-
-        document.getElementById("volume-detail-modal").classList.remove("hidden");
-    };
-
-    window.openTicketDetailModal = function() {
-        const data = BongBongStore.getAnalyticsData();
-        const items = BongBongStore.getItems();
-        const orders = BongBongStore.getOrders();
-        
-        const baseMonthlySales = 32450000;
-        const todayRevenue = BongBongCalculator.getProjectedRevenue();
-        const totalSalesVal = baseMonthlySales + todayRevenue;
-
-        const baseOrderCount = 76;
-        const totalOrderCount = baseOrderCount + orders.length;
-        const avgTicketVal = Math.round(totalSalesVal / totalOrderCount);
-
-        document.getElementById("modal-ticket-average").textContent = `₩${avgTicketVal.toLocaleString()}`;
-        document.getElementById("modal-ticket-order-count").textContent = `${totalOrderCount}건`;
-
-        const tbody = document.getElementById("modal-ticket-table-body");
-        tbody.innerHTML = "";
-
-        const buyerContribution = {};
-        data.buyers.forEach(b => {
-            buyerContribution[b.name] = b.revenue;
-        });
-
-        orders.forEach(o => {
-            const item = items.find(i => i.id === o.itemId);
-            const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
-            buyerContribution[o.buyerName] = (buyerContribution[o.buyerName] || 0) + (o.qty * price);
-        });
-
-        const sortedBuyers = Object.entries(buyerContribution).sort((a, b) => b[1] - a[1]);
-
-        sortedBuyers.forEach(([name, rev]) => {
-            tbody.insertAdjacentHTML("beforeend", `
-                <tr>
-                    <td class="px-4 py-2.5 font-bold">${name}</td>
-                    <td class="px-4 py-2.5 text-right font-bold text-primary">₩${rev.toLocaleString()}</td>
-                </tr>
-            `);
-        });
-
-        document.getElementById("ticket-detail-modal").classList.remove("hidden");
-    };
-
-    window.openActiveBuyersModal = function() {
-        const data = BongBongStore.getAnalyticsData();
-        const items = BongBongStore.getItems();
-        const orders = BongBongStore.getOrders();
-
-        const existingBuyerNames = new Set(data.buyers.map(b => b.name));
-        const todayBuyerNames = new Set(orders.map(o => o.buyerName));
-        const allBuyers = new Set([...existingBuyerNames, ...todayBuyerNames]);
-
-        let newBuyersCount = 0;
-        todayBuyerNames.forEach(name => {
-            if (!existingBuyerNames.has(name)) newBuyersCount++;
-        });
-
-        document.getElementById("modal-active-buyers-total").textContent = `${allBuyers.size}개처`;
-        document.getElementById("modal-active-buyers-new").textContent = `+${newBuyersCount}개처`;
-
-        const tbody = document.getElementById("modal-active-buyers-table-body");
-        tbody.innerHTML = "";
-
-        const buyerMap = {};
-        data.buyers.forEach(b => {
-            buyerMap[b.name] = {
-                name: b.name,
-                isNew: false,
-                mainItem: b.mainItem,
-                revenue: b.revenue
-            };
-        });
-
-        orders.forEach(o => {
-            const item = items.find(i => i.id === o.itemId);
-            const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
-            const orderRev = o.qty * price;
-
-            if (buyerMap[o.buyerName]) {
-                buyerMap[o.buyerName].revenue += orderRev;
-            } else {
-                buyerMap[o.buyerName] = {
-                    name: o.buyerName,
-                    isNew: true,
-                    mainItem: item ? item.name.replace(/\(.*?\)/g, "").trim() : o.itemId,
-                    revenue: orderRev
-                };
-            }
-        });
-
-        Object.values(buyerMap).forEach(buyer => {
-            const badge = buyer.isNew 
-                ? `<span class="text-[9px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200">당일 신규</span>` 
-                : `<span class="text-[9px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">기존 거래처</span>`;
-
-            tbody.insertAdjacentHTML("beforeend", `
-                <tr>
-                    <td class="px-4 py-2.5 font-bold">
-                        <div class="flex flex-col">
-                            <span>${buyer.name}</span>
-                            <span class="text-[10px] text-gray-400 font-normal">주품목: ${buyer.mainItem}</span>
-                        </div>
-                    </td>
-                    <td class="px-4 py-2.5">${badge}</td>
-                    <td class="px-4 py-2.5 text-right font-mono font-bold text-primary">₩${buyer.revenue.toLocaleString()}</td>
-                </tr>
-            `);
-        });
-
-        document.getElementById("active-buyers-modal").classList.remove("hidden");
-    };
-
-    window.openPendingOrdersModal = function() {
-        const items = BongBongStore.getItems();
-        const orders = BongBongStore.getOrders();
-        const pendingOrders = orders.filter(o => o.status === "대기");
-
-        const pendingCount = pendingOrders.length;
-        const pendingQty = pendingOrders.reduce((sum, o) => sum + o.qty, 0);
-
-        document.getElementById("modal-pending-count").textContent = `${pendingCount}건`;
-        document.getElementById("modal-pending-qty").textContent = `${pendingQty}박스`;
-
-        const tbody = document.getElementById("modal-pending-table-body");
-        tbody.innerHTML = "";
-
-        if (pendingCount === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="4" class="px-4 py-8 text-center text-gray-400">승인 대기 중인 발주 건이 없습니다.</td>
-                </tr>
-            `;
-        } else {
-            pendingOrders.forEach(o => {
-                const item = items.find(i => i.id === o.itemId);
+            const monthlyLen = data.monthly.labels.length;
+            for (let i = monthlyLen - 1; i >= 0; i--) {
+                const isCurrentMonth = data.monthly.labels[i] === "5월";
+                const sales = isCurrentMonth ? totalSalesVal : data.monthly.sales[i];
+                const volume = isCurrentMonth ? (data.monthly.volumes[i] + todayVolume) : data.monthly.volumes[i];
                 tbody.insertAdjacentHTML("beforeend", `
-                    <tr class="h-10 hover:bg-gray-50/50">
-                        <td class="px-4 py-2 font-semibold text-gray-900">${o.buyerName}</td>
-                        <td class="px-4 py-2 text-gray-600">${item ? item.name : o.itemId}</td>
-                        <td class="px-4 py-2 text-right font-bold text-primary">${o.qty}${item ? item.unit : '박스'}</td>
-                        <td class="px-4 py-2 text-right font-mono text-gray-400">${o.time}</td>
+                    <tr class="${isCurrentMonth ? 'bg-blue-50/50 font-bold' : ''}">
+                        <td class="px-4 py-2.5">${data.monthly.labels[i]} 누적</td>
+                        <td class="px-4 py-2.5 text-right font-bold text-primary">₩${sales.toLocaleString()}</td>
+                        <td class="px-4 py-2.5 text-right">${volume.toLocaleString()} 박스</td>
+                    </tr>
+                `);
+            }
+
+            document.getElementById("sales-detail-modal").classList.remove("hidden");
+        } catch (err) {
+            console.error("Failed to open sales detail modal:", err);
+        }
+    };
+
+    window.openVolumeDetailModal = async function() {
+        try {
+            const items = await BongBongStore.getItems();
+            const orders = await BongBongStore.getOrders();
+            const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
+            const baseMonthlyVolume = 1540;
+            const totalVolumeVal = baseMonthlyVolume + todayVolume;
+
+            document.getElementById("modal-volume-total-qty").textContent = `${totalVolumeVal.toLocaleString()} 박스`;
+            document.getElementById("modal-volume-today-qty").textContent = `+${todayVolume.toLocaleString()} 박스`;
+
+            const tbody = document.getElementById("modal-volume-table-body");
+            tbody.innerHTML = "";
+
+            const baseProductVolumes = {
+                "potato": Math.round(baseMonthlyVolume * 0.55),
+                "garlic": Math.round(baseMonthlyVolume * 0.20),
+                "onion": Math.round(baseMonthlyVolume * 0.15),
+                "other": Math.round(baseMonthlyVolume * 0.10)
+            };
+
+            const todayProductVolumes = {};
+            orders.forEach(o => {
+                todayProductVolumes[o.itemId] = (todayProductVolumes[o.itemId] || 0) + o.qty;
+            });
+
+            items.forEach(item => {
+                const baseVol = baseProductVolumes[item.id] || 0;
+                const todayVol = todayProductVolumes[item.id] || 0;
+                const totalVol = baseVol + todayVol;
+                tbody.insertAdjacentHTML("beforeend", `
+                    <tr>
+                        <td class="px-4 py-2.5 font-bold">${item.name}</td>
+                        <td class="px-4 py-2.5 text-right font-semibold text-primary">${totalVol.toLocaleString()} ${item.unit}</td>
                     </tr>
                 `);
             });
-        }
 
-        // 모달 내부 승인 버튼 바인딩
-        const approveBtn = document.getElementById("modal-pending-approve-btn");
-        if (approveBtn) {
-            if (pendingCount === 0) {
-                approveBtn.disabled = true;
-                approveBtn.className = "px-5 py-2 bg-gray-300 text-gray-500 rounded-xl text-xs font-bold cursor-not-allowed";
-            } else {
-                approveBtn.disabled = false;
-                approveBtn.className = "px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1";
-                approveBtn.onclick = () => {
-                    closeModal('pending-orders-modal');
-                    // 기존에 정의된 헤더 승인 버튼의 클릭 핸들러 동작을 똑같이 수행
-                    const approveOrdersBtn = document.getElementById("approve-orders-btn");
-                    if (approveOrdersBtn) {
-                        approveOrdersBtn.click();
-                    }
-                };
+            const otherBase = baseProductVolumes["other"] || 0;
+            let otherToday = 0;
+            orders.forEach(o => {
+                if (!items.find(i => i.id === o.itemId)) {
+                    otherToday += o.qty;
+                }
+            });
+            if (otherBase + otherToday > 0) {
+                tbody.insertAdjacentHTML("beforeend", `
+                    <tr>
+                        <td class="px-4 py-2.5 font-bold text-gray-500">기타 품목</td>
+                        <td class="px-4 py-2.5 text-right font-semibold text-gray-600">${(otherBase + otherToday).toLocaleString()} 박스</td>
+                    </tr>
+                `);
             }
-        }
 
-        document.getElementById("pending-orders-modal").classList.remove("hidden");
+            document.getElementById("volume-detail-modal").classList.remove("hidden");
+        } catch (err) {
+            console.error("Failed to open volume detail modal:", err);
+        }
+    };
+
+    window.openTicketDetailModal = async function() {
+        try {
+            const data = BongBongStore.getAnalyticsData();
+            const items = await BongBongStore.getItems();
+            const orders = await BongBongStore.getOrders();
+            
+            const baseMonthlySales = 32450000;
+            const todayRevenue = await BongBongCalculator.getProjectedRevenue();
+            const totalSalesVal = baseMonthlySales + todayRevenue;
+
+            const baseOrderCount = 76;
+            const totalOrderCount = baseOrderCount + orders.length;
+            const avgTicketVal = Math.round(totalSalesVal / totalOrderCount);
+
+            document.getElementById("modal-ticket-average").textContent = `₩${avgTicketVal.toLocaleString()}`;
+            document.getElementById("modal-ticket-order-count").textContent = `${totalOrderCount}건`;
+
+            const tbody = document.getElementById("modal-ticket-table-body");
+            tbody.innerHTML = "";
+
+            const buyerContribution = {};
+            data.buyers.forEach(b => {
+                buyerContribution[b.name] = b.revenue;
+            });
+
+            orders.forEach(o => {
+                const item = items.find(i => i.id === o.itemId);
+                const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
+                buyerContribution[o.buyerName] = (buyerContribution[o.buyerName] || 0) + (o.qty * price);
+            });
+
+            const sortedBuyers = Object.entries(buyerContribution).sort((a, b) => b[1] - a[1]);
+
+            sortedBuyers.forEach(([name, rev]) => {
+                tbody.insertAdjacentHTML("beforeend", `
+                    <tr>
+                        <td class="px-4 py-2.5 font-bold">${name}</td>
+                        <td class="px-4 py-2.5 text-right font-bold text-primary">₩${rev.toLocaleString()}</td>
+                    </tr>
+                `);
+            });
+
+            document.getElementById("ticket-detail-modal").classList.remove("hidden");
+        } catch (err) {
+            console.error("Failed to open ticket detail modal:", err);
+        }
+    };
+
+    window.openActiveBuyersModal = async function() {
+        try {
+            const data = BongBongStore.getAnalyticsData();
+            const items = await BongBongStore.getItems();
+            const orders = await BongBongStore.getOrders();
+
+            const existingBuyerNames = new Set(data.buyers.map(b => b.name));
+            const todayBuyerNames = new Set(orders.map(o => o.buyerName));
+            const allBuyers = new Set([...existingBuyerNames, ...todayBuyerNames]);
+
+            let newBuyersCount = 0;
+            todayBuyerNames.forEach(name => {
+                if (!existingBuyerNames.has(name)) newBuyersCount++;
+            });
+
+            document.getElementById("modal-active-buyers-total").textContent = `${allBuyers.size}개처`;
+            document.getElementById("modal-active-buyers-new").textContent = `+${newBuyersCount}개처`;
+
+            const tbody = document.getElementById("modal-active-buyers-table-body");
+            tbody.innerHTML = "";
+
+            const buyerMap = {};
+            data.buyers.forEach(b => {
+                buyerMap[b.name] = {
+                    name: b.name,
+                    isNew: false,
+                    mainItem: b.mainItem,
+                    revenue: b.revenue
+                };
+            });
+
+            orders.forEach(o => {
+                const item = items.find(i => i.id === o.itemId);
+                const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
+                const orderRev = o.qty * price;
+
+                if (buyerMap[o.buyerName]) {
+                    buyerMap[o.buyerName].revenue += orderRev;
+                } else {
+                    buyerMap[o.buyerName] = {
+                        name: o.buyerName,
+                        isNew: true,
+                        mainItem: item ? item.name.replace(/\(.*?\)/g, "").trim() : o.itemId,
+                        revenue: orderRev
+                    };
+                }
+            });
+
+            Object.values(buyerMap).forEach(buyer => {
+                const badge = buyer.isNew 
+                    ? `<span class="text-[9px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200">당일 신규</span>` 
+                    : `<span class="text-[9px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">기존 거래처</span>`;
+
+                tbody.insertAdjacentHTML("beforeend", `
+                    <tr>
+                        <td class="px-4 py-2.5 font-bold">
+                            <div class="flex flex-col">
+                                <span>${buyer.name}</span>
+                                <span class="text-[10px] text-gray-400 font-normal">주품목: ${buyer.mainItem}</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-2.5">${badge}</td>
+                        <td class="px-4 py-2.5 text-right font-mono font-bold text-primary">₩${buyer.revenue.toLocaleString()}</td>
+                    </tr>
+                `);
+            });
+
+            document.getElementById("active-buyers-modal").classList.remove("hidden");
+        } catch (err) {
+            console.error("Failed to open active buyers modal:", err);
+        }
+    };
+
+    window.openPendingOrdersModal = async function() {
+        try {
+            const items = await BongBongStore.getItems();
+            const orders = await BongBongStore.getOrders();
+            const pendingOrders = orders.filter(o => o.status === "대기");
+
+            const pendingCount = pendingOrders.length;
+            const pendingQty = pendingOrders.reduce((sum, o) => sum + o.qty, 0);
+
+            document.getElementById("modal-pending-count").textContent = `${pendingCount}건`;
+            document.getElementById("modal-pending-qty").textContent = `${pendingQty}박스`;
+
+            const tbody = document.getElementById("modal-pending-table-body");
+            tbody.innerHTML = "";
+
+            if (pendingCount === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="px-4 py-8 text-center text-gray-400">승인 대기 중인 발주 건이 없습니다.</td>
+                    </tr>
+                `;
+            } else {
+                pendingOrders.forEach(o => {
+                    const item = items.find(i => i.id === o.itemId);
+                    tbody.insertAdjacentHTML("beforeend", `
+                        <tr class="h-10 hover:bg-gray-50/50">
+                            <td class="px-4 py-2 font-semibold text-gray-900">${o.buyerName}</td>
+                            <td class="px-4 py-2 text-gray-600">${item ? item.name : o.itemId}</td>
+                            <td class="px-4 py-2 text-right font-bold text-primary">${o.qty}${item ? item.unit : '박스'}</td>
+                            <td class="px-4 py-2 text-right font-mono text-gray-400">${o.time}</td>
+                        </tr>
+                    `);
+                });
+            }
+
+            // 모달 내부 승인 버튼 바인딩
+            const approveBtn = document.getElementById("modal-pending-approve-btn");
+            if (approveBtn) {
+                if (pendingCount === 0) {
+                    approveBtn.disabled = true;
+                    approveBtn.className = "px-5 py-2 bg-gray-300 text-gray-500 rounded-xl text-xs font-bold cursor-not-allowed";
+                } else {
+                    approveBtn.disabled = false;
+                    approveBtn.className = "px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1";
+                    approveBtn.onclick = () => {
+                        closeModal('pending-orders-modal');
+                        // 기존에 정의된 헤더 승인 버튼의 클릭 핸들러 동작을 똑같이 수행
+                        const approveOrdersBtn = document.getElementById("approve-orders-btn");
+                        if (approveOrdersBtn) {
+                            approveOrdersBtn.click();
+                        }
+                    };
+                }
+            }
+
+            document.getElementById("pending-orders-modal").classList.remove("hidden");
+        } catch (err) {
+            console.error("Failed to open pending orders modal:", err);
+        }
     };
 </script>
 </body>

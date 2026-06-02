@@ -1,10 +1,19 @@
 /**
- * BongBong Market - Core Application State & Business Logic (Mock)
+ * BongBong Market - Core Application State & Business Logic (Mock & Supabase)
  * 공동구매 구간 단가 및 게이지바 로직을 완전히 삭제하고,
  * B2B 도매 거래처 주문 관리 및 정산 시스템으로 데이터 로직을 전면 단순화했습니다.
  */
 
-// 0. Zod 스키마 정의 (외부 입력 검증용)
+// 0. Supabase Client 초기화
+const SUPABASE_URL = "https://niyiaxakooeahvtijctc.supabase.co";
+const SUPABASE_KEY = "sb_publishable_uekfgPOxWumwL-PeH-CNlA_fWIF5OFM";
+let supabase = null;
+
+if (window.supabase) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
+// 0-1. Zod 스키마 정의 (외부 입력 검증용)
 let ItemSchema;
 let OrderSchema;
 
@@ -63,73 +72,6 @@ const CATEGORIES = [
     { id: "living", name: "생활용품" }
 ];
 
-// 2. 도매 기본 단가 테이블 정의 (수량별 차등 단가 tiers 포함)
-const DEFAULT_ITEMS = [
-    {
-        id: "potato",
-        category: "fresh",
-        name: "올바른 골드 감자 (10kg)",
-        basePrice: 18000,
-        unit: "박스",
-        tiers: [
-            { threshold: 10, price: 17000 },
-            { threshold: 20, price: 16000 }
-        ]
-    },
-    {
-        id: "onion",
-        category: "fresh",
-        name: "국산 햇 빨간 양파 (5kg)",
-        basePrice: 10500,
-        unit: "박스",
-        tiers: [
-            { threshold: 10, price: 9500 }
-        ]
-    },
-    {
-        id: "garlic",
-        category: "fresh",
-        name: "의성 깐마늘 XL (3kg)",
-        basePrice: 38000,
-        unit: "박스",
-        tiers: [
-            { threshold: 10, price: 36000 }
-        ]
-    },
-    {
-        id: "meal-kit",
-        category: "easy",
-        name: "별미집 부대찌개 밀키트 (3인분)",
-        basePrice: 13500,
-        unit: "팩",
-        tiers: []
-    },
-    {
-        id: "sweet-potato-chew",
-        category: "snack",
-        name: "말랑말랑 고구마 말랭이 (10봉)",
-        basePrice: 16000,
-        unit: "박스",
-        tiers: []
-    },
-    {
-        id: "eco-bag",
-        category: "living",
-        name: "친환경 생분해 포장봉투 (500매)",
-        basePrice: 22000,
-        unit: "롤",
-        tiers: []
-    }
-];
-
-const DEFAULT_ORDERS = [
-    { id: 1, buyerName: "김선호", itemId: "potato", qty: 5, time: "14:22", status: "승인" },
-    { id: 2, buyerName: "박민지 (맘공구)", itemId: "onion", qty: 12, time: "14:15", status: "대기" },
-    { id: 3, buyerName: "이정재", itemId: "potato", qty: 20, time: "13:45", status: "배송중" },
-    { id: 4, buyerName: "최유진 (마트)", itemId: "garlic", qty: 8, time: "13:30", status: "승인" },
-    { id: 5, buyerName: "정해인", itemId: "potato", qty: 15, time: "13:10", status: "대기" }
-];
-
 // 과거 정산 분석용 데이터
 const ANALYTICS_DATA = {
     monthly: {
@@ -156,65 +98,149 @@ const ANALYTICS_DATA = {
     ]
 };
 
-// LocalStorage 입출력 제어 클래스
+// LocalStorage 및 Supabase 통합 입출력 제어 클래스
 class BongBongStore {
     static getCategories() {
         return CATEGORIES;
     }
 
-    static getItems() {
-        const items = localStorage.getItem("bb_items");
-        if (!items) {
-            localStorage.setItem("bb_items", JSON.stringify(DEFAULT_ITEMS));
-            return DEFAULT_ITEMS;
+    static async getItems() {
+        if (!supabase) return [];
+        const { data, error } = await supabase
+            .from('bb_items')
+            .select('*')
+            .order('name');
+        
+        if (error) {
+            console.error("Failed to fetch items:", error);
+            throw new Error(error.message);
         }
-        return JSON.parse(items);
+        
+        return data.map(item => ({
+            id: item.id,
+            category: item.category,
+            name: item.name,
+            basePrice: item.base_price,
+            unit: item.unit,
+            isAvailable: item.is_available,
+            tiers: item.tiers || []
+        }));
     }
 
-    static saveItems(items) {
-        localStorage.setItem("bb_items", JSON.stringify(items));
-    }
-
-    static addItem(item) {
+    static async addItem(item) {
         if (ItemSchema) {
             ItemSchema.parse(item);
         }
-        const items = this.getItems();
-        items.push(item);
-        this.saveItems(items);
+        if (!supabase) return;
+        
+        const dbItem = {
+            id: item.id,
+            category: item.category,
+            name: item.name,
+            base_price: item.basePrice,
+            unit: item.unit,
+            is_available: item.isAvailable !== false,
+            tiers: item.tiers || []
+        };
+
+        const { error } = await supabase
+            .from('bb_items')
+            .insert(dbItem);
+            
+        if (error) {
+            console.error("Failed to add item:", error);
+            throw new Error(error.message);
+        }
         this.dispatchStorageChange();
     }
 
-    static updateItem(itemId, updatedItem) {
-        let items = this.getItems();
+    static async updateItem(itemId, updatedItem) {
+        if (!supabase) return;
+        
+        const items = await this.getItems();
         const existingItem = items.find(item => item.id === itemId);
         const newItem = { ...existingItem, ...updatedItem };
         if (ItemSchema) {
             ItemSchema.parse(newItem);
         }
-        items = items.map(item => item.id === itemId ? newItem : item);
-        this.saveItems(items);
-        this.dispatchStorageChange();
-    }
 
-    static deleteItem(itemId) {
-        let items = this.getItems();
-        items = items.filter(item => item.id !== itemId);
-        this.saveItems(items);
-        this.dispatchStorageChange();
-    }
+        const dbItem = {
+            category: newItem.category,
+            name: newItem.name,
+            base_price: newItem.basePrice,
+            unit: newItem.unit,
+            is_available: newItem.isAvailable !== false,
+            tiers: newItem.tiers || []
+        };
 
-    static getOrders() {
-        const orders = localStorage.getItem("bb_orders");
-        if (!orders) {
-            localStorage.setItem("bb_orders", JSON.stringify(DEFAULT_ORDERS));
-            return DEFAULT_ORDERS;
+        const { error } = await supabase
+            .from('bb_items')
+            .update(dbItem)
+            .eq('id', itemId);
+            
+        if (error) {
+            console.error("Failed to update item:", error);
+            throw new Error(error.message);
         }
-        return JSON.parse(orders);
+        this.dispatchStorageChange();
     }
 
-    static saveOrders(orders) {
-        localStorage.setItem("bb_orders", JSON.stringify(orders));
+    static async deleteItem(itemId) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('bb_items')
+            .delete()
+            .eq('id', itemId);
+            
+        if (error) {
+            console.error("Failed to delete item:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
+    static async getOrders() {
+        if (!supabase) return [];
+        const { data, error } = await supabase
+            .from('bb_orders')
+            .select('*')
+            .order('created_at', { ascending: false });
+        
+        if (error) {
+            console.error("Failed to fetch orders:", error);
+            throw new Error(error.message);
+        }
+        
+        return data.map(order => ({
+            id: order.id,
+            buyerName: order.buyer_name,
+            itemId: order.item_id,
+            qty: order.qty,
+            time: order.time,
+            status: order.status
+        }));
+    }
+
+    static async saveOrders(orders) {
+        if (!supabase) return;
+        const dbOrders = orders.map(order => ({
+            id: order.id,
+            buyer_name: order.buyerName,
+            item_id: order.itemId,
+            qty: order.qty,
+            status: order.status,
+            time: order.time
+        }));
+        
+        const { error } = await supabase
+            .from('bb_orders')
+            .upsert(dbOrders);
+            
+        if (error) {
+            console.error("Failed to save orders:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
     }
 
     static isClosed() {
@@ -223,9 +249,10 @@ class BongBongStore {
 
     static setClosedStatus(status) {
         localStorage.setItem("bb_is_closed", status ? "true" : "false");
+        this.dispatchStorageChange();
     }
 
-    static addOrder(buyerName, itemId, qty) {
+    static async addOrder(buyerName, itemId, qty) {
         const parsedQty = parseInt(qty, 10);
         const orderData = {
             buyerName,
@@ -236,47 +263,96 @@ class BongBongStore {
             OrderSchema.parse(orderData);
         }
 
-        const orders = this.getOrders();
+        if (!supabase) throw new Error("Database not connected");
+
         const now = new Date();
         const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
         
-        const newOrder = {
-            id: Date.now(),
-            buyerName,
-            itemId,
+        const dbOrder = {
+            buyer_name: buyerName,
+            item_id: itemId,
             qty: parsedQty,
             time: timeStr,
             status: "대기"
         };
-        orders.unshift(newOrder);
-        this.saveOrders(orders);
+
+        const { data, error } = await supabase
+            .from('bb_orders')
+            .insert(dbOrder)
+            .select();
+        
+        if (error) {
+            console.error("Failed to add order:", error);
+            throw new Error(error.message);
+        }
+
         this.dispatchStorageChange();
-        return newOrder;
+        
+        const created = data[0];
+        return {
+            id: created.id,
+            buyerName: created.buyer_name,
+            itemId: created.item_id,
+            qty: created.qty,
+            time: created.time,
+            status: created.status
+        };
     }
 
-    static updateOrderStatus(orderId, status) {
-        let orders = this.getOrders();
-        orders = orders.map(order => order.id === orderId ? { ...order, status } : order);
-        this.saveOrders(orders);
+    static async updateOrderStatus(orderId, status) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('bb_orders')
+            .update({ status })
+            .eq('id', orderId);
+            
+        if (error) {
+            console.error("Failed to update order status:", error);
+            throw new Error(error.message);
+        }
         this.dispatchStorageChange();
     }
 
-    static updateOrder(orderId, updatedFields) {
-        let orders = this.getOrders();
+    static async updateOrder(orderId, updatedFields) {
+        if (!supabase) return;
+
+        const orders = await this.getOrders();
         const existingOrder = orders.find(order => order.id === orderId);
         const newOrder = { ...existingOrder, ...updatedFields };
         if (OrderSchema) {
             OrderSchema.parse(newOrder);
         }
-        orders = orders.map(order => order.id === orderId ? newOrder : order);
-        this.saveOrders(orders);
+
+        const dbOrder = {
+            buyer_name: newOrder.buyerName,
+            item_id: newOrder.itemId,
+            qty: newOrder.qty,
+            status: newOrder.status
+        };
+
+        const { error } = await supabase
+            .from('bb_orders')
+            .update(dbOrder)
+            .eq('id', orderId);
+            
+        if (error) {
+            console.error("Failed to update order:", error);
+            throw new Error(error.message);
+        }
         this.dispatchStorageChange();
     }
 
-    static deleteOrder(orderId) {
-        let orders = this.getOrders();
-        orders = orders.filter(order => order.id !== orderId);
-        this.saveOrders(orders);
+    static async deleteOrder(orderId) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('bb_orders')
+            .delete()
+            .eq('id', orderId);
+            
+        if (error) {
+            console.error("Failed to delete order:", error);
+            throw new Error(error.message);
+        }
         this.dispatchStorageChange();
     }
 
@@ -314,8 +390,8 @@ class BongBongStore {
 
 // B2B 정산 계산기 (거래처별 수량에 따른 차등 도매 단가 적용 계산)
 class BongBongCalculator {
-    static getItemTotalQty(itemId) {
-        const orders = BongBongStore.getOrders();
+    static async getItemTotalQty(itemId) {
+        const orders = await BongBongStore.getOrders();
         return orders
             .filter(order => order.itemId === itemId)
             .reduce((sum, order) => sum + order.qty, 0);
@@ -325,7 +401,6 @@ class BongBongCalculator {
         if (!item) return 0;
         let unitPrice = item.basePrice;
         if (item.tiers && item.tiers.length > 0) {
-            // threshold가 qty 이상인 tiers 중 가장 큰 threshold를 가진 tier의 단가 적용
             const matchedTier = [...item.tiers]
                 .sort((a, b) => b.threshold - a.threshold)
                 .find(t => qty >= t.threshold);
@@ -336,11 +411,10 @@ class BongBongCalculator {
         return unitPrice;
     }
 
-    static getProjectedRevenue() {
-        const items = BongBongStore.getItems();
-        const orders = BongBongStore.getOrders();
+    static async getProjectedRevenue() {
+        const items = await BongBongStore.getItems();
+        const orders = await BongBongStore.getOrders();
         
-        // 거래처별 + 품목별 수량 집계
         const buyerSummary = {};
         orders.forEach(order => {
             if (!buyerSummary[order.buyerName]) {
@@ -364,24 +438,20 @@ class BongBongCalculator {
         return totalRevenue;
     }
 
-    // 특정 상품에 대한 티어 및 다음 혜택 정보를 반환
     static getTierBenefitInfo(item, qty) {
         if (!item) return null;
         
         const basePrice = item.basePrice;
         const tiers = item.tiers || [];
         
-        // 1. 현재 적용 중인 단가 계산
         const currentUnitPrice = this.getWholesaleUnitPrice(item, qty);
         const currentTotal = qty * currentUnitPrice;
         const baseTotal = qty * basePrice;
         const savedAmount = baseTotal - currentTotal;
         
-        // 2. 현재 적용된 티어
         const sortedTiers = [...tiers].sort((a, b) => a.threshold - b.threshold);
         const currentTier = [...sortedTiers].reverse().find(t => qty >= t.threshold) || null;
         
-        // 3. 다음 혜택 티어 찾기
         const nextTier = sortedTiers.find(t => qty < t.threshold) || null;
         
         let remainingQty = 0;
