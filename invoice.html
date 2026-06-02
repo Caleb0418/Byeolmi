@@ -132,9 +132,10 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/zod@3.22.4/lib/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener("DOMContentLoaded", async () => {
         // Query Params
         const params = new URLSearchParams(window.location.search);
         const buyer = params.get("buyer");
@@ -150,51 +151,57 @@
         const now = new Date();
         document.getElementById("invoice-date").textContent = `DATE: ${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
 
-        // Load Data
-        const items = BongBongStore.getItems();
-        const orders = BongBongStore.getOrders();
+        try {
+            // Load Data
+            const items = await BongBongStore.getItems();
+            const orders = await BongBongStore.getOrders();
 
-        // 1. 해당 거래처의 주문 수량 집계
-        const itemQtyMap = {};
-        orders.forEach(o => {
-            if (o.buyerName === buyer) {
-                if (!itemQtyMap[o.itemId]) {
-                    itemQtyMap[o.itemId] = 0;
+            // 1. 해당 거래처의 주문 수량 집계
+            const itemQtyMap = {};
+            orders.forEach(o => {
+                if (o.buyerName === buyer) {
+                    if (!itemQtyMap[o.itemId]) {
+                        itemQtyMap[o.itemId] = 0;
+                    }
+                    itemQtyMap[o.itemId] += o.qty;
                 }
-                itemQtyMap[o.itemId] += o.qty;
+            });
+
+            // 2. 렌더링 및 금액 합산
+            const tbody = document.getElementById("invoice-items");
+            tbody.innerHTML = "";
+            let totalBill = 0;
+            let count = 0;
+
+            for (const [itemId, totalQty] of Object.entries(itemQtyMap)) {
+                const item = items.find(i => i.id === itemId);
+                if (!item) continue;
+                
+                // Get the secure final price from the server via RPC
+                const benefitInfo = await BongBongStore.getBuyerTierBenefit(itemId, totalQty);
+                const finalPrice = benefitInfo ? benefitInfo.currentUnitPrice : item.basePrice;
+                const subtotal = totalQty * finalPrice;
+                totalBill += subtotal;
+                count++;
+
+                const tr = `
+                    <tr class="border-b border-gray-50/50">
+                        <td class="py-3 font-bold text-gray-900">${item.name}</td>
+                        <td class="py-3 text-center font-semibold">${totalQty}${item.unit}</td>
+                        <td class="py-3 text-right font-mono">₩${finalPrice.toLocaleString()}</td>
+                        <td class="py-3 text-right font-mono font-bold">₩${subtotal.toLocaleString()}</td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML("beforeend", tr);
             }
-        });
 
-        // 2. 렌더링 및 금액 합산
-        const tbody = document.getElementById("invoice-items");
-        tbody.innerHTML = "";
-        let totalBill = 0;
-        let count = 0;
-
-        for (const [itemId, totalQty] of Object.entries(itemQtyMap)) {
-            const item = items.find(i => i.id === itemId);
-            if (!item) continue;
-            
-            const finalPrice = BongBongCalculator.getWholesaleUnitPrice(item, totalQty);
-            const subtotal = totalQty * finalPrice;
-            totalBill += subtotal;
-            count++;
-
-            const tr = `
-                <tr class="border-b border-gray-50/50">
-                    <td class="py-3 font-bold text-gray-900">${item.name}</td>
-                    <td class="py-3 text-center font-semibold">${totalQty}${item.unit}</td>
-                    <td class="py-3 text-right font-mono">₩${finalPrice.toLocaleString()}</td>
-                    <td class="py-3 text-right font-mono font-bold">₩${subtotal.toLocaleString()}</td>
-                </tr>
-            `;
-            tbody.insertAdjacentHTML("beforeend", tr);
-        }
-
-        if (count === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-gray-400">금일 접수된 발주 내역이 존재하지 않습니다.</td></tr>`;
-        } else {
-            document.getElementById("invoice-total").textContent = `₩${totalBill.toLocaleString()}`;
+                tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-gray-400">금일 접수된 발주 내역이 존재하지 않습니다.</td></tr>`;
+            } else {
+                document.getElementById("invoice-total").textContent = `₩${totalBill.toLocaleString()}`;
+            }
+        } catch (err) {
+            console.error("Failed to load invoice:", err);
+            document.getElementById("invoice-items").innerHTML = `<tr><td colspan="4" class="py-6 text-center text-red-500">정산 명세서 데이터를 불러오는 중 오류가 발생했습니다.</td></tr>`;
         }
     });
 
