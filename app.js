@@ -107,9 +107,8 @@ class BongBongStore {
     static async getItems() {
         if (!supabase) return [];
         const { data, error } = await supabase
-            .from('bb_items')
-            .select('*')
-            .order('name');
+            .from('items')
+            .select('*, item_tiers(*)');
         
         if (error) {
             console.error("Failed to fetch items:", error);
@@ -123,7 +122,10 @@ class BongBongStore {
             basePrice: item.base_price,
             unit: item.unit,
             isAvailable: item.is_available,
-            tiers: item.tiers || []
+            tiers: (item.item_tiers || []).map(t => ({
+                threshold: t.threshold,
+                price: t.price
+            }))
         }));
     }
 
@@ -139,18 +141,33 @@ class BongBongStore {
             name: item.name,
             base_price: item.basePrice,
             unit: item.unit,
-            is_available: item.isAvailable !== false,
-            tiers: item.tiers || []
+            is_available: item.isAvailable !== false
         };
 
-        const { error } = await supabase
-            .from('bb_items')
+        const { error: itemError } = await supabase
+            .from('items')
             .insert(dbItem);
             
-        if (error) {
-            console.error("Failed to add item:", error);
-            throw new Error(error.message);
+        if (itemError) {
+            console.error("Failed to add item:", itemError);
+            throw new Error(itemError.message);
         }
+
+        if (item.tiers && item.tiers.length > 0) {
+            const dbTiers = item.tiers.map(t => ({
+                item_id: item.id,
+                threshold: t.threshold,
+                price: t.price
+            }));
+            const { error: tiersError } = await supabase
+                .from('item_tiers')
+                .insert(dbTiers);
+            if (tiersError) {
+                console.error("Failed to add item tiers:", tiersError);
+                throw new Error(tiersError.message);
+            }
+        }
+        
         this.dispatchStorageChange();
     }
 
@@ -169,26 +186,51 @@ class BongBongStore {
             name: newItem.name,
             base_price: newItem.basePrice,
             unit: newItem.unit,
-            is_available: newItem.isAvailable !== false,
-            tiers: newItem.tiers || []
+            is_available: newItem.isAvailable !== false
         };
 
-        const { error } = await supabase
-            .from('bb_items')
+        const { error: itemError } = await supabase
+            .from('items')
             .update(dbItem)
             .eq('id', itemId);
             
-        if (error) {
-            console.error("Failed to update item:", error);
-            throw new Error(error.message);
+        if (itemError) {
+            console.error("Failed to update item:", itemError);
+            throw new Error(itemError.message);
         }
+
+        const { error: deleteTiersError } = await supabase
+            .from('item_tiers')
+            .delete()
+            .eq('item_id', itemId);
+
+        if (deleteTiersError) {
+            console.error("Failed to delete item tiers:", deleteTiersError);
+            throw new Error(deleteTiersError.message);
+        }
+
+        if (newItem.tiers && newItem.tiers.length > 0) {
+            const dbTiers = newItem.tiers.map(t => ({
+                item_id: itemId,
+                threshold: t.threshold,
+                price: t.price
+            }));
+            const { error: insertTiersError } = await supabase
+                .from('item_tiers')
+                .insert(dbTiers);
+            if (insertTiersError) {
+                console.error("Failed to insert item tiers:", insertTiersError);
+                throw new Error(insertTiersError.message);
+            }
+        }
+        
         this.dispatchStorageChange();
     }
 
     static async deleteItem(itemId) {
         if (!supabase) return;
         const { error } = await supabase
-            .from('bb_items')
+            .from('items')
             .delete()
             .eq('id', itemId);
             
@@ -202,7 +244,7 @@ class BongBongStore {
     static async getOrders() {
         if (!supabase) return [];
         const { data, error } = await supabase
-            .from('bb_orders')
+            .from('orders')
             .select('*')
             .order('created_at', { ascending: false });
         
@@ -233,7 +275,7 @@ class BongBongStore {
         }));
         
         const { error } = await supabase
-            .from('bb_orders')
+            .from('orders')
             .upsert(dbOrders);
             
         if (error) {
@@ -277,7 +319,7 @@ class BongBongStore {
         };
 
         const { data, error } = await supabase
-            .from('bb_orders')
+            .from('orders')
             .insert(dbOrder)
             .select();
         
@@ -302,7 +344,7 @@ class BongBongStore {
     static async updateOrderStatus(orderId, status) {
         if (!supabase) return;
         const { error } = await supabase
-            .from('bb_orders')
+            .from('orders')
             .update({ status })
             .eq('id', orderId);
             
@@ -331,7 +373,7 @@ class BongBongStore {
         };
 
         const { error } = await supabase
-            .from('bb_orders')
+            .from('orders')
             .update(dbOrder)
             .eq('id', orderId);
             
@@ -345,7 +387,7 @@ class BongBongStore {
     static async deleteOrder(orderId) {
         if (!supabase) return;
         const { error } = await supabase
-            .from('bb_orders')
+            .from('orders')
             .delete()
             .eq('id', orderId);
             
@@ -385,6 +427,91 @@ class BongBongStore {
             ...ANALYTICS_DATA,
             buyers: this.getAnalyticsBuyers()
         };
+    }
+
+    static async getBuyerTierBenefit(itemId, qty) {
+        if (!supabase) return null;
+        const { data, error } = await supabase
+            .rpc('get_buyer_tier_benefit', { p_item_id: itemId, p_qty: qty });
+        if (error) {
+            console.error("Failed to get buyer tier benefit:", error);
+            throw new Error(error.message);
+        }
+        return data;
+    }
+
+    static async getApprovedOwners() {
+        if (!supabase) return [];
+        const { data, error } = await supabase
+            .from('approved_owners')
+            .select('email')
+            .order('created_at', { ascending: false });
+        if (error) {
+            console.error("Failed to fetch approved owners:", error);
+            throw new Error(error.message);
+        }
+        return data.map(o => o.email);
+    }
+
+    static async addApprovedOwner(email) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('approved_owners')
+            .insert({ email });
+        if (error) {
+            console.error("Failed to add approved owner:", error);
+            throw new Error(error.message);
+        }
+    }
+
+    static async deleteApprovedOwner(email) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('approved_owners')
+            .delete()
+            .eq('email', email);
+    }
+    static async sendAlimtalk(buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl) {
+        if (!supabase) throw new Error("Database not connected");
+        const { data, error } = await supabase.functions.invoke('send-alimtalk', {
+            body: { buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl }
+        });
+        if (error) {
+            console.error("Failed to invoke send-alimtalk function:", error);
+            throw error;
+        }
+        return data;
+    }
+
+    static async saveSettlement(settlement) {
+        if (!supabase) return;
+        
+        // Find buyer uuid if buyerId is not uuid or name matches
+        let buyerId = settlement.buyerId;
+        if (!buyerId) {
+            const { data } = await supabase
+                .from('buyers')
+                .select('id')
+                .eq('name', settlement.buyerName)
+                .maybeSingle();
+            if (data) buyerId = data.id;
+        }
+
+        const { error } = await supabase
+            .from('settlements')
+            .insert({
+                buyer_id: buyerId,
+                settled_date: settlement.settledDate,
+                total_amount: settlement.totalAmount,
+                detail: settlement.detail,
+                send_status: settlement.sendStatus,
+                sent_at: settlement.sentAt,
+                error_message: settlement.errorMessage
+            });
+        if (error) {
+            console.error("Failed to save settlement:", error);
+            throw new Error(error.message);
+        }
     }
 }
 
@@ -481,3 +608,84 @@ class BongBongCalculator {
 
 window.BongBongStore = BongBongStore;
 window.BongBongCalculator = BongBongCalculator;
+
+// B2B 사용자 카카오 OAuth 인증 관리자 클래스
+class BongBongAuth {
+    static async signInWithKakao() {
+        if (!supabase) return;
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'kakao',
+            options: {
+                redirectTo: window.location.origin + '/client.html'
+            }
+        });
+        if (error) {
+            console.error("Kakao login failed:", error);
+            throw error;
+        }
+    }
+
+    static async signOut() {
+        if (!supabase) return;
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error("Signout failed:", error);
+            throw error;
+        }
+    }
+
+    static async getCurrentUser() {
+        if (!supabase) return null;
+        const { data: { user } } = await supabase.auth.getUser();
+        return user;
+    }
+
+    static async getMyRole() {
+        if (!supabase) return 'buyer';
+        const user = await this.getCurrentUser();
+        if (!user) return 'buyer';
+        
+        const { data, error } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+            
+        if (error) {
+            console.error("Failed to fetch user role:", error);
+            return 'buyer';
+        }
+        return data ? data.role : 'buyer';
+    }
+}
+
+window.BongBongAuth = BongBongAuth;
+
+const CRYPTO_SECRET = "bongbong-secret-key-1234567890";
+
+class BongBongCrypt {
+    static encrypt(text) {
+        if (!text) return "";
+        if (typeof CryptoJS === 'undefined') return text;
+        return CryptoJS.AES.encrypt(text, CRYPTO_SECRET).toString();
+    }
+
+    static decrypt(cipher) {
+        if (!cipher) return "";
+        if (typeof CryptoJS === 'undefined') return cipher;
+        try {
+            const bytes = CryptoJS.AES.decrypt(cipher, CRYPTO_SECRET);
+            return bytes.toString(CryptoJS.enc.Utf8);
+        } catch (e) {
+            console.error("Decryption failed:", e);
+            return cipher;
+        }
+    }
+
+    static maskContact(contact) {
+        if (!contact) return "";
+        return contact.replace(/(\d{3})-(\d{3,4})-(\d{4})/, '$1-****-$3');
+    }
+}
+
+window.BongBongCrypt = BongBongCrypt;

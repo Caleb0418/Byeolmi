@@ -78,6 +78,10 @@
             <span class="material-symbols-outlined">payments</span>
             <span>품목 및 단가 설정</span>
         </button>
+        <button onclick="openSettingsModal()" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-primary transition-all text-left">
+            <span class="material-symbols-outlined">settings</span>
+            <span>시스템 설정</span>
+        </button>
         <a class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-primary transition-all" href="client.html" target="_blank">
             <span class="material-symbols-outlined">phone_iphone</span>
             <span>구매자 주문서 (체험)</span>
@@ -705,17 +709,86 @@
     </div>
 
 
+    <!-- System Settings Modal -->
+    <div id="system-settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
+            <div class="bg-primary px-5 py-4 flex justify-between items-center text-white">
+                <h3 class="text-md font-bold flex items-center gap-1.5">
+                    <span class="material-symbols-outlined">settings</span>
+                    시스템 환경 설정
+                </h3>
+                <button type="button" onclick="closeModal('system-settings-modal')" class="text-white hover:text-gray-200">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-6">
+                <!-- Owner registration section -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase">사장님(Owner) 계정 등록 및 권한 위임</h4>
+                    <p class="text-xs text-gray-400">여기에 등록된 이메일 계정은 카카오 로그인 시 자동으로 사장님 대시보드 접근 권한을 얻게 됩니다.</p>
+                    <form id="add-owner-form" class="flex gap-2">
+                        <input type="email" id="new-owner-email" required placeholder="사장님 카카오 이메일 (예: willy0418@naver.com)" class="flex-1 rounded-xl border-gray-200 text-xs focus:border-primary focus:ring-primary">
+                        <button type="submit" class="bg-primary text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-opacity-90 whitespace-nowrap">등록</button>
+                    </form>
+                </div>
+                
+                <!-- List of approved owners -->
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase">등록된 사장님 권한 목록</h4>
+                    <div class="overflow-x-auto rounded-xl border border-gray-100">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-100 font-bold text-gray-500">
+                                    <th class="px-4 py-2.5">이메일 계정</th>
+                                    <th class="px-4 py-2.5 text-right font-mono">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="approved-owners-list-body" class="divide-y divide-gray-50 text-gray-700">
+                                <!-- Rendered dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
 </main>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/zod@3.22.4/lib/index.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 <script>
     let isBulkEditing = false;
 
-    document.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener("DOMContentLoaded", async () => {
         // Elements
         const orderTableBody = document.getElementById("order-table-body");
+
+        // 0. 사장님(Owner) 권한 체크
+        async function checkDashboardAuth() {
+            if (!supabase) return;
+            try {
+                const user = await BongBongAuth.getCurrentUser();
+                if (!user) {
+                    // 로그인되지 않은 경우 카카오 로그인 요청
+                    if (confirm("로그인이 필요한 서비스입니다. 카카오 로그인 페이지로 이동하시겠습니까?")) {
+                        await BongBongAuth.signInWithKakao();
+                    }
+                    return;
+                }
+                const role = await BongBongAuth.getMyRole();
+                if (role !== 'owner') {
+                    alert("사장님(Owner)만 접근할 수 있는 페이지입니다. 발주 화면으로 이동합니다.");
+                    window.location.href = "client.html";
+                }
+            } catch (err) {
+                console.error("Auth check failed:", err);
+            }
+        }
+        await checkDashboardAuth();
         const totalQtyCounter = document.getElementById("total-qty-counter");
         const projectedRevenue = document.getElementById("projected-revenue");
         const adminClosedBadge = document.getElementById("admin-closed-badge");
@@ -1069,10 +1142,167 @@
         cancelPreviewBtn.addEventListener("click", () => kakaoPreviewModal.classList.add("hidden"));
 
         // 발송 승인
-        confirmSendBtn.addEventListener("click", () => {
-            kakaoPreviewModal.classList.add("hidden");
-            alert("총 " + previewCount.textContent + "건의 거래처별 정산 알림톡이 카카오톡 망을 통해 안전하게 발송되었습니다!");
+        confirmSendBtn.addEventListener("click", async () => {
+            confirmSendBtn.disabled = true;
+            confirmSendBtn.innerHTML = `<span class="material-symbols-outlined text-sm animate-spin">sync</span> 발송 중...`;
+            
+            try {
+                const items = await BongBongStore.getItems();
+                const orders = await BongBongStore.getOrders();
+                
+                // Get buyers map for contact lookup
+                const { data: buyersData } = await supabase.from('buyers').select('*');
+                const buyersMap = {};
+                (buyersData || []).forEach(b => {
+                    buyersMap[b.name] = b;
+                });
+
+                // Group orders by buyer name
+                const buyerSummary = {};
+                orders.forEach(o => {
+                    if (!buyerSummary[o.buyerName]) {
+                        buyerSummary[o.buyerName] = {};
+                    }
+                    if (!buyerSummary[o.buyerName][o.itemId]) {
+                        buyerSummary[o.buyerName][o.itemId] = 0;
+                    }
+                    buyerSummary[o.buyerName][o.itemId] += o.qty;
+                });
+
+                const buyersList = Object.keys(buyerSummary);
+                let successCount = 0;
+                let failCount = 0;
+                const errors = [];
+
+                for (const buyerName of buyersList) {
+                    const itemQtyMap = buyerSummary[buyerName];
+                    let totalAmount = 0;
+                    let detailList = [];
+                    let itemsDetailSummary = "";
+
+                    for (const [itemId, totalQty] of Object.entries(itemQtyMap)) {
+                        const item = items.find(i => i.id === itemId);
+                        if (!item) continue;
+                        const finalPrice = BongBongCalculator.getWholesaleUnitPrice(item, totalQty);
+                        const subtotal = totalQty * finalPrice;
+                        totalAmount += subtotal;
+                        itemsDetailSummary += `- ${item.name} (${totalQty}${item.unit}): ₩${subtotal.toLocaleString()}\n`;
+                        detailList.push({ itemId, qty: totalQty, price: finalPrice });
+                    }
+
+                    const buyerObj = buyersMap[buyerName];
+                    const contact = buyerObj ? buyerObj.contact : '010-0000-0000'; // Default fallback
+                    const invoiceUrl = window.location.origin + `/invoice.html?buyer=${encodeURIComponent(buyerName)}`;
+
+                    const today = new Date();
+                    const settledDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+                    try {
+                        // Call Edge Function
+                        await BongBongStore.sendAlimtalk(buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl);
+                        
+                        // Save success to DB
+                        await BongBongStore.saveSettlement({
+                            buyerName,
+                            settledDate,
+                            totalAmount,
+                            detail: detailList,
+                            sendStatus: 'sent',
+                            sentAt: new Date().toISOString(),
+                            errorMessage: null
+                        });
+                        successCount++;
+                    } catch (sendErr) {
+                        console.error(`Failed to send Alimtalk to ${buyerName}:`, sendErr);
+                        // Save failure to DB
+                        await BongBongStore.saveSettlement({
+                            buyerName,
+                            settledDate,
+                            totalAmount,
+                            detail: detailList,
+                            sendStatus: 'failed',
+                            sentAt: null,
+                            errorMessage: sendErr.message
+                        });
+                        failCount++;
+                        errors.push(`${buyerName}: ${sendErr.message}`);
+                    }
+                }
+
+                kakaoPreviewModal.classList.add("hidden");
+                
+                if (failCount === 0) {
+                    alert(`🎉 총 ${successCount}건의 알림톡 발송에 모두 성공했습니다!`);
+                } else {
+                    alert(`⚠️ 알림톡 발송 결과:\n- 성공: ${successCount}건\n- 실패: ${failCount}건\n\n실패 사유:\n${errors.join('\n')}\n\n* 실패한 거래처는 데이터베이스 또는 정산 관리에서 개별 재발송할 수 있습니다.`);
+                }
+            } catch (err) {
+                console.error("Bulk send execution failed:", err);
+                alert("알림톡 발송 중 오류가 발생했습니다: " + err.message);
+            } finally {
+                confirmSendBtn.disabled = false;
+                confirmSendBtn.innerHTML = `<span class="material-symbols-outlined text-sm">send</span> 알림톡 일괄 발송 승인`;
+            }
         });
+
+        // --- System Settings Modal Logic ---
+        window.openSettingsModal = async function() {
+            document.getElementById("system-settings-modal").classList.remove("hidden");
+            await renderApprovedOwnersList();
+        };
+
+        async function renderApprovedOwnersList() {
+            const listBody = document.getElementById("approved-owners-list-body");
+            listBody.innerHTML = "";
+            try {
+                const emails = await BongBongStore.getApprovedOwners();
+                if (emails.length === 0) {
+                    listBody.innerHTML = `<tr><td colspan="2" class="px-4 py-4 text-center text-gray-400">등록된 사장님 계정이 없습니다.</td></tr>`;
+                    return;
+                }
+                emails.forEach(email => {
+                    const tr = `
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-4 py-3 font-semibold text-gray-750">${email}</td>
+                            <td class="px-4 py-3 text-right">
+                                <button onclick="handleDeleteOwner('${email}')" class="text-red-500 hover:text-red-700 font-bold">삭제</button>
+                            </td>
+                        </tr>
+                    `;
+                    listBody.insertAdjacentHTML("beforeend", tr);
+                });
+            } catch (err) {
+                console.error("Failed to render approved owners:", err);
+            }
+        }
+
+        document.getElementById("add-owner-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const emailInput = document.getElementById("new-owner-email");
+            const email = emailInput.value.trim();
+            if (!email) return;
+
+            try {
+                await BongBongStore.addApprovedOwner(email);
+                emailInput.value = "";
+                await renderApprovedOwnersList();
+                alert(`[${email}] 계정이 사장님 권한 목록에 추가되었습니다.`);
+            } catch (err) {
+                alert("사장님 계정 등록에 실패했습니다: " + err.message);
+            }
+        });
+
+        window.handleDeleteOwner = async function(email) {
+            if (confirm(`[${email}] 계정의 사장님 권한을 회수하시겠습니까?`)) {
+                try {
+                    await BongBongStore.deleteApprovedOwner(email);
+                    await renderApprovedOwnersList();
+                    alert("권한 회수가 완료되었습니다.");
+                } catch (err) {
+                    alert("권한 회수에 실패했습니다: " + err.message);
+                }
+            }
+        };
 
         renderAdminDashboard();
 
@@ -1082,21 +1312,20 @@
                 .channel('bb_changes')
                 .on(
                     'postgres_changes',
-                    { event: '*', schema: 'public', table: 'bb_orders' },
+                    { event: '*', schema: 'public', table: 'orders' },
                     async () => {
                         await renderAdminDashboard();
                     }
                 )
                 .on(
                     'postgres_changes',
-                    { event: '*', schema: 'public', table: 'bb_items' },
+                    { event: '*', schema: 'public', table: 'items' },
                     async () => {
                         await renderAdminDashboard();
                     }
                 )
                 .subscribe();
         }
-
         window.addEventListener('storage', async () => {
             await renderAdminDashboard();
         });
