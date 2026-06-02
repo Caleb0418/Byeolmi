@@ -305,6 +305,21 @@
 
         await renderPage();
         await updateRealtimeBenefit();
+
+        // Supabase Realtime 구독 설정 (품목 변동 또는 할인 구간 설정 변동 시 동적 반영)
+        if (supabase) {
+            supabase
+                .channel('bb_client_changes')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'bb_items' },
+                    async () => {
+                        await renderPage();
+                        await updateRealtimeBenefit();
+                    }
+                )
+                .subscribe();
+        }
     });
 
     // 실시간 도매 혜택 상태 및 계산 피드백

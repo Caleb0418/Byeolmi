@@ -1075,9 +1075,28 @@
         });
 
         renderAdminDashboard();
-        setInterval(async () => {
-            await renderAdminDashboard();
-        }, 3000);
+
+        // Supabase Realtime 구독 설정 (기존 3초 주기 폴링 타이머 제거)
+        if (supabase) {
+            supabase
+                .channel('bb_changes')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'bb_orders' },
+                    async () => {
+                        await renderAdminDashboard();
+                    }
+                )
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'bb_items' },
+                    async () => {
+                        await renderAdminDashboard();
+                    }
+                )
+                .subscribe();
+        }
+
         window.addEventListener('storage', async () => {
             await renderAdminDashboard();
         });

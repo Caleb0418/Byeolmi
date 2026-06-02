@@ -5,8 +5,8 @@
  */
 
 // 0. Supabase Client 초기화
-const SUPABASE_URL = "https://niyiaxakooeahvtijctc.supabase.co";
-const SUPABASE_KEY = "sb_publishable_uekfgPOxWumwL-PeH-CNlA_fWIF5OFM";
+const SUPABASE_URL = "https://jobksthdcqslozwrxcxy.supabase.co";
+const SUPABASE_KEY = "sb_publishable_2eMUEbeE4AOwCeHzqDXkyA_imFLRVps";
 let supabase = null;
 
 if (window.supabase) {
