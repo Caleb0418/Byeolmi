@@ -192,6 +192,17 @@
                                 <!-- Dynamic tier rows -->
                             </div>
                             <p class="text-[10px] text-gray-400">※ 예시: 10개 이상 구매 시 박스당 17,000원으로 단가 할인 적용</p>
+                            
+                            <!-- Tiers Visual Preview Area -->
+                            <div id="editor-tiers-preview" class="mt-4 p-4 rounded-xl bg-gray-50/60 border border-gray-150 hidden space-y-2">
+                                <h4 class="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-xs text-primary font-bold">bar_chart</span>
+                                    차등 단가 혜택 프리뷰
+                                </h4>
+                                <div id="editor-tiers-preview-list" class="space-y-1.5 text-xs text-gray-700">
+                                    <!-- Dynamic list of tiers -->
+                                </div>
+                            </div>
                         </div>
 
                         <div class="flex gap-3 justify-end pt-4 border-t border-gray-100">
@@ -696,6 +707,7 @@
 
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/zod@3.22.4/lib/index.umd.js"></script>
 <script src="app.js"></script>
 <script>
     let isBulkEditing = false;
@@ -1297,8 +1309,12 @@
             
             let tiersText = "";
             if (item.tiers && item.tiers.length > 0) {
-                const innerTiers = item.tiers.map(t => `${t.threshold}개↑: ₩${t.price.toLocaleString()}`).join(', ');
-                tiersText = `<p class="text-[9px] text-primary font-semibold mt-1">차등: ${innerTiers}</p>`;
+                const innerTiers = item.tiers.map(t => `
+                    <span class="inline-flex items-center text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded-md font-bold shrink-0">
+                        ${t.threshold}${item.unit}↑ ₩${t.price.toLocaleString()}
+                    </span>
+                `).join('');
+                tiersText = `<div class="flex flex-wrap gap-1 mt-2">${innerTiers}</div>`;
             }
 
             const div = `
@@ -1320,6 +1336,7 @@
         productEditorForm.reset();
         document.getElementById("edit-product-status").value = "true";
         document.getElementById("editor-tiers-container").innerHTML = "";
+        document.getElementById("editor-tiers-preview").classList.add("hidden");
         deleteProductBtn.classList.add("hidden");
     }
 
@@ -1343,6 +1360,8 @@
             });
         }
 
+        updateTiersPreview();
+
         deleteProductBtn.classList.remove("hidden");
         deleteProductBtn.onclick = () => {
             if(confirm(`[${item.name}] 품목을 정말 삭제하시겠습니까?`)) {
@@ -1354,6 +1373,76 @@
         };
     }
 
+    // 구간 단가 실시간 프리뷰 업데이트
+    function updateTiersPreview() {
+        const basePriceInput = document.getElementById("edit-product-base-price");
+        const basePrice = parseInt(basePriceInput.value, 10) || 0;
+        const unit = document.getElementById("edit-product-unit").value || "개";
+        
+        const tierRows = document.getElementById("editor-tiers-container").querySelectorAll(".tier-row");
+        const previewContainer = document.getElementById("editor-tiers-preview");
+        const previewList = document.getElementById("editor-tiers-preview-list");
+        
+        const parsedTiers = [];
+        tierRows.forEach(row => {
+            const thresholdInput = row.querySelector(".tier-threshold");
+            const priceInput = row.querySelector(".tier-price");
+            const threshold = parseInt(thresholdInput.value, 10);
+            const price = parseInt(priceInput.value, 10);
+            
+            if (!isNaN(threshold) && !isNaN(price)) {
+                parsedTiers.push({ threshold, price });
+            }
+        });
+        
+        if (parsedTiers.length === 0) {
+            previewContainer.classList.add("hidden");
+            return;
+        }
+        
+        // 정렬
+        parsedTiers.sort((a, b) => a.threshold - b.threshold);
+        
+        previewContainer.classList.remove("hidden");
+        previewList.innerHTML = "";
+        
+        // 기본단가 행 렌더링
+        let previewHtml = `
+            <div class="flex justify-between items-center py-1 border-b border-gray-100 font-semibold text-gray-500">
+                <span>기본 구매 (1 ~ ${parsedTiers[0].threshold - 1}${unit})</span>
+                <span>₩${basePrice.toLocaleString()} / ${unit}</span>
+            </div>
+        `;
+        
+        // 구간 렌더링
+        for (let i = 0; i < parsedTiers.length; i++) {
+            const tier = parsedTiers[i];
+            const nextTier = parsedTiers[i + 1];
+            const isLast = i === parsedTiers.length - 1;
+            
+            const rangeText = isLast 
+                ? `${tier.threshold}${unit} 이상` 
+                : `${tier.threshold} ~ ${nextTier.threshold - 1}${unit}`;
+                
+            const discountAmt = basePrice - tier.price;
+            const discountPercent = basePrice > 0 ? Math.round((discountAmt / basePrice) * 100) : 0;
+            const discountText = discountAmt > 0 
+                ? `<span class="text-emerald-600 font-bold ml-1.5">(-₩${discountAmt.toLocaleString()} / ${discountPercent}% 할인)</span>` 
+                : "";
+                
+            previewHtml += `
+                <div class="flex justify-between items-center py-1.5 border-b border-gray-100">
+                    <span class="font-bold text-gray-800">${rangeText}</span>
+                    <span class="font-mono font-bold text-primary flex items-center">
+                        ₩${tier.price.toLocaleString()} / ${unit} ${discountText}
+                    </span>
+                </div>
+            `;
+        }
+        
+        previewList.innerHTML = previewHtml;
+    }
+
     // 구간 단가 폼 행 추가
     function addTierInputRow(threshold = "", price = "") {
         const tiersContainer = document.getElementById("editor-tiers-container");
@@ -1363,10 +1452,20 @@
                 <input type="number" placeholder="기준수량" value="${threshold}" required class="tier-threshold w-24 rounded-lg border-gray-200 text-xs">
                 <span class="text-xs text-gray-400">개 이상 시</span>
                 <input type="number" placeholder="단가(원)" value="${price}" required class="tier-price flex-1 rounded-lg border-gray-200 text-xs">
-                <span class="material-symbols-outlined text-gray-400 cursor-pointer hover:text-red-500 text-sm" onclick="document.getElementById('${rowId}').remove()">delete</span>
+                <span class="material-symbols-outlined text-gray-400 cursor-pointer hover:text-red-500 text-sm" id="delete-${rowId}">delete</span>
             </div>
         `;
         tiersContainer.insertAdjacentHTML("beforeend", row);
+        
+        const addedRow = document.getElementById(rowId);
+        addedRow.querySelector(".tier-threshold").addEventListener("input", updateTiersPreview);
+        addedRow.querySelector(".tier-price").addEventListener("input", updateTiersPreview);
+        addedRow.querySelector(`#delete-${rowId}`).addEventListener("click", () => {
+            addedRow.remove();
+            updateTiersPreview();
+        });
+        
+        updateTiersPreview();
     }
 
     // 폼 저장 버튼 핸들러
@@ -1402,19 +1501,30 @@
             tiers
         };
 
-        if (productId) {
-            // 수정
-            BongBongStore.updateItem(productId, targetProduct);
-        } else {
-            // 추가
-            BongBongStore.addItem(targetProduct);
-        }
+        try {
+            if (productId) {
+                BongBongStore.updateItem(productId, targetProduct);
+            } else {
+                BongBongStore.addItem(targetProduct);
+            }
 
-        renderModalProductList();
-        initNewProductForm();
-        renderAdminDashboard();
-        alert("품목 설정이 정상적으로 저장되었습니다.");
+            renderModalProductList();
+            initNewProductForm();
+            renderAdminDashboard();
+            alert("품목 설정이 정상적으로 저장되었습니다.");
+        } catch (error) {
+            console.error("품목 저장 에러:", error);
+            if (error.errors) {
+                const errorMsg = error.errors.map(err => `• ${err.message}`).join("\n");
+                alert(`품목 정보 입력 값이 올바르지 않습니다.\n\n${errorMsg}`);
+            } else {
+                alert(`저장 중 오류가 발생했습니다: ${error.message}`);
+            }
+        }
     });
+
+    document.getElementById("edit-product-base-price").addEventListener("input", updateTiersPreview);
+    document.getElementById("edit-product-unit").addEventListener("input", updateTiersPreview);
 
     window.changeOrderStatus = function(orderId, newStatus) {
         BongBongStore.updateOrderStatus(orderId, newStatus);

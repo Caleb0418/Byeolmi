@@ -139,6 +139,31 @@
                     </div>
                 </div>
 
+                <!-- 실시간 도매 단가 혜택 체감바 -->
+                <div id="realtime-benefit-bar" class="hidden p-4 rounded-2xl border bg-emerald-50/40 border-emerald-100/60 space-y-2.5 transition-all duration-300">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-bold text-gray-500">실시간 도매 단가 적용 현황</span>
+                        <span id="benefit-badge" class="px-2 py-0.5 text-[9px] font-bold rounded-lg bg-gray-200 text-gray-600">기본 단가</span>
+                    </div>
+                    
+                    <!-- Progress bar -->
+                    <div id="benefit-progress-container" class="w-full h-2 bg-gray-100 rounded-full overflow-hidden relative hidden">
+                        <div id="benefit-progress-bar" class="h-full bg-emerald-600 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    
+                    <!-- Nudge text -->
+                    <p id="benefit-nudge-text" class="text-[11px] font-bold text-gray-600 leading-normal"></p>
+                    
+                    <!-- Calculation summary -->
+                    <div id="benefit-calc-summary" class="border-t border-dashed border-emerald-200/50 pt-2.5 flex justify-between items-baseline text-xs">
+                        <span class="text-gray-500">예상 단가 합계</span>
+                        <div>
+                            <span id="benefit-calc-price" class="font-mono font-bold text-gray-900 text-sm">₩0</span>
+                            <span id="benefit-calc-saved" class="text-[10px] font-bold text-emerald-600 ml-1"></span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Submit Button -->
                 <button type="submit" id="submit-btn" 
                         class="w-full bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm transform active:scale-98 transition-all flex items-center justify-center gap-2 text-sm">
@@ -208,6 +233,7 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/zod@3.22.4/lib/index.umd.js"></script>
 <script src="app.js"></script>
 <script>
     let activeCategory = 'all';
@@ -216,55 +242,148 @@
         const itemSelect = document.getElementById("item-select");
         const qtyInput = document.getElementById("qty-input");
         const orderForm = document.getElementById("order-form");
-        const closedAlert = document.getElementById("closed-alert");
 
-        // 1. 마감여부 체크 제거 (상시 접수 가능)
-        // const isClosed = BongBongStore.isClosed();
-        // if (isClosed) {
-        //     orderForm.classList.add("hidden");
-        //     closedAlert.classList.remove("hidden");
-        // }
-
-        // 2. 캐시된 이름 복구
+        // 1. 캐시된 이름 복구
         const cachedName = localStorage.getItem("bb_cached_buyer_name");
         if (cachedName) {
             document.getElementById("buyer-name").value = cachedName;
         }
 
-        // 3. 수량 증감 제어
+        // 2. 수량 증감 제어
         document.getElementById("qty-minus").addEventListener("click", () => {
             let val = parseInt(qtyInput.value, 10);
-            if (val > 1) qtyInput.value = val - 1;
+            if (val > 1) {
+                qtyInput.value = val - 1;
+                updateRealtimeBenefit();
+            }
         });
 
         document.getElementById("qty-plus").addEventListener("click", () => {
             let val = parseInt(qtyInput.value, 10);
             qtyInput.value = val + 1;
+            updateRealtimeBenefit();
         });
 
-        // 4. 주문 제출 이벤트
+        qtyInput.addEventListener("input", updateRealtimeBenefit);
+        itemSelect.addEventListener("change", updateRealtimeBenefit);
+
+        // 3. 주문 제출 이벤트 (Zod 검증)
         orderForm.addEventListener("submit", (e) => {
             e.preventDefault();
             const buyerName = document.getElementById("buyer-name").value.trim();
             const itemId = itemSelect.value;
             const qty = qtyInput.value;
 
-            if (!buyerName) return;
+            try {
+                localStorage.setItem("bb_cached_buyer_name", buyerName);
+                BongBongStore.addOrder(buyerName, itemId, qty);
 
-            localStorage.setItem("bb_cached_buyer_name", buyerName);
-            BongBongStore.addOrder(buyerName, itemId, qty);
-
-            const items = BongBongStore.getItems();
-            const itemName = items.find(i=>i.id===itemId).name;
-            
-            openOrderSuccessDrawer(buyerName, itemName, qty);
-            
-            renderPage();
-            qtyInput.value = 5;
+                const items = BongBongStore.getItems();
+                const itemName = items.find(i=>i.id===itemId).name;
+                
+                openOrderSuccessDrawer(buyerName, itemName, qty);
+                
+                renderPage();
+                qtyInput.value = 5;
+                updateRealtimeBenefit();
+            } catch (error) {
+                console.error("주문 전송 에러:", error);
+                if (error.errors) {
+                    const errorMsg = error.errors.map(err => `• ${err.message}`).join("\n");
+                    alert(`발주 정보 입력 값이 올바르지 않습니다.\n\n${errorMsg}`);
+                } else {
+                    alert(`주문 전송 중 오류가 발생했습니다: ${error.message}`);
+                }
+            }
         });
 
         renderPage();
+        updateRealtimeBenefit();
     });
+
+    // 실시간 도매 혜택 상태 및 계산 피드백
+    function updateRealtimeBenefit() {
+        const itemSelect = document.getElementById("item-select");
+        const qtyInput = document.getElementById("qty-input");
+        const itemId = itemSelect.value;
+        const qty = parseInt(qtyInput.value, 10) || 0;
+
+        const realtimeBar = document.getElementById("realtime-benefit-bar");
+        const badge = document.getElementById("benefit-badge");
+        const progressContainer = document.getElementById("benefit-progress-container");
+        const progressBar = document.getElementById("benefit-progress-bar");
+        const nudgeText = document.getElementById("benefit-nudge-text");
+        const calcPrice = document.getElementById("benefit-calc-price");
+        const calcSaved = document.getElementById("benefit-calc-saved");
+
+        if (!itemId || qty <= 0) {
+            realtimeBar.classList.add("hidden");
+            return;
+        }
+
+        const items = BongBongStore.getItems();
+        const item = items.find(i => i.id === itemId);
+        if (!item) {
+            realtimeBar.classList.add("hidden");
+            return;
+        }
+
+        const info = BongBongCalculator.getTierBenefitInfo(item, qty);
+        if (!info || !info.hasTiers) {
+            // Tiers가 없는 품목은 기본 계산 요약만 노출
+            realtimeBar.classList.remove("hidden");
+            badge.textContent = "일반 도매가";
+            badge.className = "px-2 py-0.5 text-[9px] font-bold rounded-lg bg-gray-100 text-gray-500";
+            progressContainer.classList.add("hidden");
+            nudgeText.textContent = "이 품목은 단일 도매가로 판매되는 품목입니다.";
+            calcPrice.textContent = `₩${info.currentTotal.toLocaleString()}`;
+            calcSaved.textContent = "";
+            return;
+        }
+
+        realtimeBar.classList.remove("hidden");
+
+        // 1. 배지 및 상태 갱신
+        if (info.currentTier) {
+            badge.textContent = `${info.currentTier.threshold}${item.unit}↑ 할인가 적용 중`;
+            badge.className = "px-2 py-0.5 text-[9px] font-bold rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-200/50";
+        } else {
+            badge.textContent = "기본 도매가";
+            badge.className = "px-2 py-0.5 text-[9px] font-bold rounded-lg bg-gray-100 text-gray-500";
+        }
+
+        // 2. 넛지 텍스트 및 프로그레스바 설정
+        if (info.nextTier) {
+            progressContainer.classList.remove("hidden");
+            
+            // 프로그레스 퍼센트 계산
+            let percent = 0;
+            let currentBase = 0;
+            if (info.currentTier) {
+                currentBase = info.currentTier.threshold;
+            }
+            const nextThreshold = info.nextTier.threshold;
+            
+            if (nextThreshold - currentBase > 0) {
+                percent = Math.min(100, Math.max(0, ((qty - currentBase) / (nextThreshold - currentBase)) * 100));
+            }
+            progressBar.style.width = `${percent}%`;
+
+            nudgeText.innerHTML = `💡 <span class="text-emerald-700">${info.remainingQty}${item.unit}</span> 더 주문 시, 단가 <span class="text-emerald-700">₩${info.nextPrice.toLocaleString()}</span>으로 추가 가격 인하!`;
+        } else {
+            // 마지막 티어까지 모두 달성했을 때
+            progressContainer.classList.add("hidden");
+            nudgeText.innerHTML = "🎉 <span class="text-emerald-700">최대 할인 혜택</span>을 적용받고 계십니다!";
+        }
+
+        // 3. 정산 금액 요약
+        calcPrice.textContent = `₩${info.currentTotal.toLocaleString()}`;
+        if (info.savedAmount > 0) {
+            calcSaved.textContent = `(총 ₩${info.savedAmount.toLocaleString()} 절약)`;
+        } else {
+            calcSaved.textContent = "";
+        }
+    }
 
     // 카테고리 필터 변경
     function filterCategory(catId) {
@@ -281,6 +400,7 @@
             }
         });
         renderPage();
+        updateRealtimeBenefit();
     }
 
     // 전체 화면 리프레시 렌더링 (달성율 게이지바 완전 제거)
@@ -315,6 +435,22 @@
             }
             itemSelect.appendChild(opt);
 
+            // 차등 가격 배지 리스트 구성
+            let tiersInfoHtml = "";
+            if (item.tiers && item.tiers.length > 0) {
+                const tiersList = item.tiers.map(t => `
+                    <span class="inline-flex items-center text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-100/50 shrink-0">
+                        ${t.threshold}${item.unit}↑ ₩${t.price.toLocaleString()}
+                    </span>
+                `).join('');
+                tiersInfoHtml = `
+                    <div class="mt-2 space-y-1">
+                        <span class="text-[9px] font-bold text-gray-400 block">도매 차등 할인가</span>
+                        <div class="flex flex-wrap gap-1">${tiersList}</div>
+                    </div>
+                `;
+            }
+
             // 단순 품목 텍스트 카드 렌더링
             const badgeClass = isAvail 
                 ? "text-brandAccent bg-green-50 border-brandAccent/20" 
@@ -323,14 +459,15 @@
             const opacityClass = isAvail ? "" : "opacity-60";
 
             const itemHtml = `
-                <div class="p-4 border border-gray-100 rounded-xl bg-white flex justify-between items-center hover:shadow-sm transition-all ${opacityClass}">
-                    <div>
-                        <h4 class="font-bold text-gray-900 text-xs">${item.name}</h4>
-                        <p class="text-[10px] text-gray-400 mt-1">도매 규격 단위: ${item.unit}</p>
-                    </div>
-                    <div>
+                <div class="p-4 border border-gray-100 rounded-xl bg-white flex flex-col justify-between hover:shadow-sm transition-all ${opacityClass}">
+                    <div class="flex justify-between items-start w-full">
+                        <div>
+                            <h4 class="font-bold text-gray-900 text-xs">${item.name}</h4>
+                            <p class="text-[10px] text-gray-400 mt-1">기본 도매가: ₩${item.basePrice.toLocaleString()} / 단위: ${item.unit}</p>
+                        </div>
                         <span class="px-2.5 py-1 border rounded-lg text-[10px] font-bold ${badgeClass}">${badgeText}</span>
                     </div>
+                    ${tiersInfoHtml}
                 </div>
             `;
             container.insertAdjacentHTML("beforeend", itemHtml);

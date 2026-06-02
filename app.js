@@ -4,6 +4,57 @@
  * B2B 도매 거래처 주문 관리 및 정산 시스템으로 데이터 로직을 전면 단순화했습니다.
  */
 
+// 0. Zod 스키마 정의 (외부 입력 검증용)
+let ItemSchema;
+let OrderSchema;
+
+if (window.z) {
+    const { z } = window;
+
+    const TierSchema = z.object({
+        threshold: z.number().int().positive("기준 수량은 양의 정수여야 합니다."),
+        price: z.number().int().nonnegative("단가는 0원 이상이어야 합니다.")
+    });
+
+    ItemSchema = z.object({
+        id: z.string().min(1, "아이디는 필수입니다."),
+        category: z.enum(["fresh", "easy", "snack", "living"]),
+        name: z.string().min(1, "품목명은 필수입니다."),
+        basePrice: z.number().int().positive("기본 단가는 양의 정수여야 합니다."),
+        unit: z.string().min(1, "단위는 필수입니다."),
+        isAvailable: z.boolean().optional(),
+        tiers: z.array(TierSchema).optional().default([])
+    }).refine(data => {
+        // 유효성 체크 1: 모든 차등 할인 단가는 기본 판매 단가보다 낮아야 함
+        if (data.tiers && data.tiers.length > 0) {
+            return data.tiers.every(tier => tier.price < data.basePrice);
+        }
+        return true;
+    }, {
+        message: "차등 할인 단가는 기본 판매 단가보다 낮아야 합니다.",
+        path: ["tiers"]
+    }).refine(data => {
+        // 유효성 체크 2: tiers 안에 중복된 threshold가 없어야 함
+        if (data.tiers && data.tiers.length > 0) {
+            const thresholds = data.tiers.map(t => t.threshold);
+            return new Set(thresholds).size === thresholds.length;
+        }
+        return true;
+    }, {
+        message: "중복된 기준 수량이 존재합니다.",
+        path: ["tiers"]
+    });
+
+    OrderSchema = z.object({
+        id: z.number().optional(),
+        buyerName: z.string().min(1, "대표자명 / 업체명은 필수입니다."),
+        itemId: z.string().min(1, "품목을 선택해 주세요."),
+        qty: z.number().int().positive("발주 수량은 1개 이상이어야 합니다."),
+        time: z.string().optional(),
+        status: z.enum(["대기", "승인", "배송중", "완료"]).optional()
+    });
+}
+
 // 1. 카테고리 정의
 const CATEGORIES = [
     { id: "fresh", name: "신선식품" },
@@ -125,6 +176,9 @@ class BongBongStore {
     }
 
     static addItem(item) {
+        if (ItemSchema) {
+            ItemSchema.parse(item);
+        }
         const items = this.getItems();
         items.push(item);
         this.saveItems(items);
@@ -133,7 +187,12 @@ class BongBongStore {
 
     static updateItem(itemId, updatedItem) {
         let items = this.getItems();
-        items = items.map(item => item.id === itemId ? { ...item, ...updatedItem } : item);
+        const existingItem = items.find(item => item.id === itemId);
+        const newItem = { ...existingItem, ...updatedItem };
+        if (ItemSchema) {
+            ItemSchema.parse(newItem);
+        }
+        items = items.map(item => item.id === itemId ? newItem : item);
         this.saveItems(items);
         this.dispatchStorageChange();
     }
@@ -167,6 +226,16 @@ class BongBongStore {
     }
 
     static addOrder(buyerName, itemId, qty) {
+        const parsedQty = parseInt(qty, 10);
+        const orderData = {
+            buyerName,
+            itemId,
+            qty: parsedQty
+        };
+        if (OrderSchema) {
+            OrderSchema.parse(orderData);
+        }
+
         const orders = this.getOrders();
         const now = new Date();
         const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -175,7 +244,7 @@ class BongBongStore {
             id: Date.now(),
             buyerName,
             itemId,
-            qty: parseInt(qty, 10),
+            qty: parsedQty,
             time: timeStr,
             status: "대기"
         };
@@ -194,7 +263,12 @@ class BongBongStore {
 
     static updateOrder(orderId, updatedFields) {
         let orders = this.getOrders();
-        orders = orders.map(order => order.id === orderId ? { ...order, ...updatedFields } : order);
+        const existingOrder = orders.find(order => order.id === orderId);
+        const newOrder = { ...existingOrder, ...updatedFields };
+        if (OrderSchema) {
+            OrderSchema.parse(newOrder);
+        }
+        orders = orders.map(order => order.id === orderId ? newOrder : order);
         this.saveOrders(orders);
         this.dispatchStorageChange();
     }
@@ -288,6 +362,50 @@ class BongBongCalculator {
         }
 
         return totalRevenue;
+    }
+
+    // 특정 상품에 대한 티어 및 다음 혜택 정보를 반환
+    static getTierBenefitInfo(item, qty) {
+        if (!item) return null;
+        
+        const basePrice = item.basePrice;
+        const tiers = item.tiers || [];
+        
+        // 1. 현재 적용 중인 단가 계산
+        const currentUnitPrice = this.getWholesaleUnitPrice(item, qty);
+        const currentTotal = qty * currentUnitPrice;
+        const baseTotal = qty * basePrice;
+        const savedAmount = baseTotal - currentTotal;
+        
+        // 2. 현재 적용된 티어
+        const sortedTiers = [...tiers].sort((a, b) => a.threshold - b.threshold);
+        const currentTier = [...sortedTiers].reverse().find(t => qty >= t.threshold) || null;
+        
+        // 3. 다음 혜택 티어 찾기
+        const nextTier = sortedTiers.find(t => qty < t.threshold) || null;
+        
+        let remainingQty = 0;
+        let nextPrice = 0;
+        let nextSavingsPerUnit = 0;
+        
+        if (nextTier) {
+            remainingQty = nextTier.threshold - qty;
+            nextPrice = nextTier.price;
+            nextSavingsPerUnit = currentUnitPrice - nextPrice;
+        }
+        
+        return {
+            basePrice,
+            currentUnitPrice,
+            currentTotal,
+            savedAmount,
+            currentTier,
+            nextTier,
+            remainingQty,
+            nextPrice,
+            nextSavingsPerUnit,
+            hasTiers: tiers.length > 0
+        };
     }
 }
 
