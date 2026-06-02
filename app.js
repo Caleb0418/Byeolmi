@@ -7,11 +7,11 @@
 // 0. Supabase Client 초기화
 const SUPABASE_URL = "https://jobksthdcqslozwrxcxy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_2eMUEbeE4AOwCeHzqDXkyA_imFLRVps";
-let supabase = null;
 
-if (window.supabase) {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+if (window.supabase && typeof window.supabase.createClient === 'function') {
+    window.supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 }
+var supabase = window.supabase;
 
 // 0-1. Zod 스키마 정의 (외부 입력 검증용)
 let ItemSchema;
