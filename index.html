@@ -92,7 +92,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm overflow-hidden" id="owner-avatar">대표</div>
                 <div class="flex flex-col">
-                    <span class="text-sm font-bold truncate max-w-[120px]" id="owner-name-display">김성식 사장님</span>
+                    <span class="text-sm font-bold truncate max-w-[120px]" id="owner-name-display">로딩 중...</span>
                     <span class="text-xs text-gray-400 font-medium">공급처 마스터</span>
                 </div>
             </div>
@@ -995,7 +995,7 @@
                 }
 
                 // 로그인된 계정 프로필 세팅
-                const ownerName = user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.user_name || "김성식";
+                const ownerName = user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.user_name || "관리자";
                 const displayEl = document.getElementById("owner-name-display");
                 if (displayEl) {
                     // 이름 뒤에 사장님 타이틀이 이미 붙어있지 않은 경우에만 동적으로 덧붙임
