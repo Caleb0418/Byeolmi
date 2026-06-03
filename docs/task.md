@@ -61,5 +61,9 @@
   - `[x]` (P2-4) 접근성 초기 개선 — focus-visible + prefers-reduced-motion (3개 페이지)
     - `[ ]` (후속) 색대비·터치타깃·aria-label·스크린리더 정식 WCAG 감사 (a11y-architect + 브라우저)
 
-- `[ ]` **[Phase 12] P3 운영 준비 (다음 작업)**
-  - `[ ]` (P3-1) 배포 파이프라인 · (P3-2) 알림톡 템플릿 심사 · (P3-3) 온보딩 UX
+- `[~]` **[Phase 12] P3 운영 준비** — 상세: `docs/antigravity_progress.md`
+  - `[x]` (P3-1) Vercel 보안 헤더(`vercel.json`) — CI/`.env.example`은 후속
+  - `[x]` (P3-3) 온보딩 UX — 계좌/상호 설정 분리(`app_settings`) + 빈 상태 UX
+    - `[ ]` (배포) `20260603000003_app_settings.sql` 운영 DB 적용, 선택적 `BANK_INFO` env
+  - `[ ]` (P3-2) 카카오 알림톡 템플릿 2종 심사 — 운영자 영역
+  - `[ ]` (P3-1 후속) GitHub Actions(테스트 자동화), `.env.example`

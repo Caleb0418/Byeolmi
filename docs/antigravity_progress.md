@@ -110,7 +110,11 @@
   - **CSP는 의도적으로 제외**: 앱이 인라인 `onclick` 핸들러를 대량 사용하고 Tailwind Play CDN을 쓰기 때문에 엄격한 CSP는 `'unsafe-inline'`/`'unsafe-eval'`이 불가피해 실효성이 낮고 사이트 파손 위험이 큼. 인라인 핸들러를 이벤트 바인딩으로 리팩터링한 뒤 nonce 기반 CSP 도입을 후속 과제로 둔다.
   - 남은 일: GitHub Actions(테스트 자동화), `.env.example`/키 주입 정리.
 - **P3-2 알림톡 템플릿 심사**: 카카오 비즈니스 템플릿 2종(정산/발주확인) 승인 — 운영자 영역.
-- **P3-3 온보딩 UX**: 계좌/상호 하드코딩(4곳) → 설정 분리, 품목 0개 빈 상태 안내 — 코드 작업 남음.
+- **P3-3 온보딩 UX (코드 완료)** ✔
+  - **계좌/상호 설정 분리**: `app_settings`(키-값) 테이블 + RLS(공개 read/owner write) 신설. `BongBongStore.getSettings/updateSettings/formatAccount` 추가. **테이블 없거나 비어도 기본값 폴백**(마이그레이션 전에도 안전).
+  - 하드코딩 계좌 5곳을 설정값 바인딩으로 전환: `invoice.html`(계좌·예금주·복사), `index.html`(알림톡 프리뷰 + **대시보드 설정 모달에 계좌/상호 편집 폼**), `client.html`(푸터 계좌), `send-alimtalk`(`BANK_INFO` env).
+  - **빈 상태(empty state)**: 사장님 품목 0개("첫 품목 등록하기" CTA), 구매자 화면 품목/분류 없음 안내.
+  - **⚠️ 적용 필요**: `supabase/migrations/20260603000003_app_settings.sql`를 운영 DB에 적용해야 대시보드 저장이 동작(미적용 시 표시는 기본값으로 정상, 저장만 실패). 선택: Edge Function `BANK_INFO` env 설정.
 
 ---
 
