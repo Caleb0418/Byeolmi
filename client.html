@@ -506,22 +506,6 @@
                 }
                 itemSelect.appendChild(opt);
 
-                // 차등 가격 배지 리스트 구성
-                let tiersInfoHtml = "";
-                if (item.tiers && item.tiers.length > 0) {
-                    const tiersList = item.tiers.map(t => `
-                        <span class="inline-flex items-center text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-100/50 shrink-0">
-                            ${t.threshold}${item.unit}↑ ₩${t.price.toLocaleString()}
-                        </span>
-                    `).join('');
-                    tiersInfoHtml = `
-                        <div class="mt-2 space-y-1">
-                            <span class="text-[9px] font-bold text-gray-400 block">도매 차등 할인가</span>
-                            <div class="flex flex-wrap gap-1">${tiersList}</div>
-                        </div>
-                    `;
-                }
-
                 // 단순 품목 텍스트 카드 렌더링
                 const badgeClass = isAvail 
                     ? "text-brandAccent bg-green-50 border-brandAccent/20" 
@@ -538,7 +522,6 @@
                             </div>
                             <span class="px-2.5 py-1 border rounded-lg text-[10px] font-bold ${badgeClass}">${badgeText}</span>
                         </div>
-                        ${tiersInfoHtml}
                     </div>
                 `;
                 container.insertAdjacentHTML("beforeend", itemHtml);
