@@ -18,28 +18,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Solapi HMAC Header Signature Generator
-function getSolapiHeaders() {
-  const date = new Date().toISOString();
-  const salt = Math.random().toString(36).substring(2, 12);
-  
-  // HMAC SHA256 Signature
-  // Deno Web Crypto API 활용
-  const data = date + salt;
-  const encoder = new TextEncoder();
-  const keyBuf = encoder.encode(SOLAPI_API_SECRET);
-  const dataBuf = encoder.encode(data);
-  
-  // We can also use simple HMAC signature or standard library
-  // For simplicity and robust runtime execution in Deno:
-  // Solapi signature is: hmac_sha256(secret, date + salt)
-  // Let's implement it using WebCrypto
-  return {
-    date,
-    salt,
-  };
-}
-
 // Generate Auth Signature using Crypto Subtle
 async function getAuthHeaderValue(date: string, salt: string) {
   const encoder = new TextEncoder();
@@ -91,8 +69,9 @@ serve(async (req) => {
       });
     }
 
-    // 1. Solapi Auth Headers 구성
-    const { date, salt } = getSolapiHeaders();
+    // 1. Solapi Auth Headers 구성 (date + salt 로 HMAC 서명)
+    const date = new Date().toISOString();
+    const salt = Math.random().toString(36).substring(2, 12);
     const authorization = await getAuthHeaderValue(date, salt);
 
     // 2. 알림톡 발송 양식 (타입별 문구/템플릿 구성)
