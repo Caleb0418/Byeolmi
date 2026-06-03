@@ -120,6 +120,13 @@
                            class="w-full rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark text-sm py-3 px-4">
                 </div>
 
+                <!-- Buyer Phone Number -->
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-400 mb-1">대표자 휴대폰 번호 (알림톡 전송용)</label>
+                    <input type="tel" id="buyer-contact" required placeholder="예: 010-1234-5678" 
+                           class="w-full rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark text-sm py-3 px-4">
+                </div>
+
                 <!-- Item Select -->
                 <div>
                     <label class="block text-[11px] font-bold text-gray-400 mb-1">발주 품목 선택</label>
@@ -209,22 +216,7 @@
         </div>
     </div>
 
-    <!-- Kakao Login Overlay Modal -->
-    <div id="kakao-login-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-6 text-center border border-gray-100">
-            <div class="space-y-2">
-                <div class="w-16 h-16 rounded-full bg-[#fee500] text-[#3c1e1e] flex items-center justify-center mx-auto shadow-sm">
-                    <span class="material-symbols-outlined text-3xl font-bold">chat_bubble</span>
-                </div>
-                <h3 class="font-serif text-lg font-bold text-gray-900">별미집 B2B 파트너 로그인</h3>
-                <p class="text-xs text-gray-500">본 발주 시스템은 사전 승인된 도매 파트너 전용 공간입니다. 카카오 계정으로 로그인 후 이용해 주세요.</p>
-            </div>
-            <button onclick="handleKakaoLogin()" class="w-full bg-[#fee500] hover:bg-[#ebd200] text-[#3c1e1e] font-extrabold py-4 rounded-xl shadow-sm text-sm active:scale-98 transition-all flex items-center justify-center gap-2">
-                <span class="material-symbols-outlined text-lg">chat_bubble</span>
-                카카오계정으로 로그인
-            </button>
-        </div>
-    </div>
+    <!-- Kakao Login Overlay Modal (제거됨 - 비로그인 즉시 발주 지원) -->
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -239,25 +231,52 @@
         const qtyInput = document.getElementById("qty-input");
         const orderForm = document.getElementById("order-form");
 
-        // 0. Buyer 권한 및 프로필 자동 로드
+        // 0. Buyer 권한 및 프로필 자동 로드 (비로그인 발주는 입력 허용)
         async function checkClientAuth() {
             if (!supabase) return;
-            const loginModal = document.getElementById("kakao-login-modal");
             try {
+                const buyerInput = document.getElementById("buyer-name");
+                const contactInput = document.getElementById("buyer-contact");
+
+                // URL에서 token 파라미터가 제공된 경우 (우선순위 1)
+                const urlParams = new URLSearchParams(window.location.search);
+                const token = urlParams.get('token');
+                if (token) {
+                    const { data: buyerData } = await supabase
+                        .from('buyers')
+                        .select('name, contact')
+                        .eq('id', token)
+                        .maybeSingle();
+                    if (buyerData) {
+                        buyerInput.value = buyerData.name;
+                        buyerInput.disabled = true;
+                        
+                        if (buyerData.contact) {
+                            const decryptedContact = BongBongCrypt.decrypt(buyerData.contact);
+                            contactInput.value = decryptedContact;
+                            contactInput.disabled = true;
+                        }
+                        return;
+                    }
+                }
+
+                // 기존 로그인 세션이 있는 경우 (우선순위 2)
                 const user = await BongBongAuth.getCurrentUser();
-                if (!user) {
-                    loginModal.classList.remove("hidden");
-                } else {
-                    loginModal.classList.add("hidden");
+                if (user) {
                     const { data, error } = await supabase
                         .from('buyers')
-                        .select('name')
+                        .select('name, contact')
                         .eq('auth_uid', user.id)
                         .maybeSingle();
                     if (data && data.name) {
-                        const buyerInput = document.getElementById("buyer-name");
                         buyerInput.value = data.name;
                         buyerInput.disabled = true;
+                        
+                        if (data.contact) {
+                            const decryptedContact = BongBongCrypt.decrypt(data.contact);
+                            contactInput.value = decryptedContact;
+                            contactInput.disabled = true;
+                        }
                     }
                 }
             } catch (err) {
@@ -266,10 +285,14 @@
         }
         await checkClientAuth();
 
-        // 1. 캐시된 이름 복구
+        // 1. 캐시된 정보 복구
         const cachedName = localStorage.getItem("bb_cached_buyer_name");
-        if (cachedName) {
+        if (cachedName && !document.getElementById("buyer-name").value) {
             document.getElementById("buyer-name").value = cachedName;
+        }
+        const cachedContact = localStorage.getItem("bb_cached_buyer_contact");
+        if (cachedContact && !document.getElementById("buyer-contact").value) {
+            document.getElementById("buyer-contact").value = cachedContact;
         }
 
         // 2. 수량 증감 제어
@@ -299,12 +322,14 @@
         orderForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             const buyerName = document.getElementById("buyer-name").value.trim();
+            const buyerContact = document.getElementById("buyer-contact").value.trim();
             const itemId = itemSelect.value;
             const qty = qtyInput.value;
 
             try {
                 localStorage.setItem("bb_cached_buyer_name", buyerName);
-                await BongBongStore.addOrder(buyerName, itemId, qty);
+                localStorage.setItem("bb_cached_buyer_contact", buyerContact);
+                await BongBongStore.addOrder(buyerName, itemId, qty, buyerContact);
 
                 const items = await BongBongStore.getItems();
                 const itemName = items.find(i=>i.id===itemId).name;

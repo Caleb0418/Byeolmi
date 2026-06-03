@@ -57,6 +57,7 @@ if (window.z) {
     OrderSchema = z.object({
         id: z.number().optional(),
         buyerName: z.string().min(1, "대표자명 / 업체명은 필수입니다."),
+        buyerContact: z.string().regex(/^01[016789]-?\d{3,4}-?\d{4}$/, "올바른 휴대폰 번호 형식이 아닙니다 (예: 010-1234-5678).").optional().or(z.literal("")),
         itemId: z.string().min(1, "품목을 선택해 주세요."),
         qty: z.number().int().positive("발주 수량은 1개 이상이어야 합니다."),
         time: z.string().optional(),
@@ -294,10 +295,18 @@ class BongBongStore {
         this.dispatchStorageChange();
     }
 
-    static async addOrder(buyerName, itemId, qty) {
+    static async addOrder(buyerName, itemId, qty, buyerContact = "") {
         const parsedQty = parseInt(qty, 10);
+        
+        // 연락처 하이픈 자동 정리
+        let formattedContact = "";
+        if (buyerContact) {
+            formattedContact = buyerContact.replace(/[^0-9]/g, '').replace(/(\d{3})(\d{3,4})(\d{4})/, '$1-$2-$3');
+        }
+
         const orderData = {
             buyerName,
+            buyerContact: formattedContact,
             itemId,
             qty: parsedQty
         };
@@ -307,9 +316,11 @@ class BongBongStore {
 
         if (!supabase) throw new Error("Database not connected");
 
-        // RLS 정책 통과를 위해 현재 로그인된 유저의 buyer_id 조회
+        // RLS 및 데이터 관계 매핑을 위한 buyer_id 조회 또는 생성
         let buyerId = null;
         const { data: { user } } = await supabase.auth.getUser();
+        
+        // 1. 로그인된 상태라면 auth_uid 기반으로 우선 조회
         if (user) {
             const { data: buyerData } = await supabase
                 .from('buyers')
@@ -318,6 +329,37 @@ class BongBongStore {
                 .maybeSingle();
             if (buyerData) {
                 buyerId = buyerData.id;
+            }
+        }
+        
+        // 2. 비로그인이거나 매핑 정보가 없으면 이름(buyerName) 기반 조회
+        if (!buyerId) {
+            const { data: buyerByName } = await supabase
+                .from('buyers')
+                .select('id, contact')
+                .eq('name', buyerName)
+                .maybeSingle();
+            if (buyerByName) {
+                buyerId = buyerByName.id;
+                // 만약 새로운 연락처 정보가 입력되었으나 기존 정보가 없는 경우 업데이트
+                if (formattedContact && !buyerByName.contact) {
+                    const encryptedContact = BongBongCrypt.encrypt(formattedContact);
+                    await supabase
+                        .from('buyers')
+                        .update({ contact: encryptedContact })
+                        .eq('id', buyerId);
+                }
+            } else {
+                // 3. 존재하지 않는 이름일 경우 새로운 거래처 정보 자동 생성 (연락처 암호화 저장)
+                const encryptedContact = formattedContact ? BongBongCrypt.encrypt(formattedContact) : null;
+                const { data: newBuyer } = await supabase
+                    .from('buyers')
+                    .insert({ name: buyerName, contact: encryptedContact })
+                    .select('id')
+                    .maybeSingle();
+                if (newBuyer) {
+                    buyerId = newBuyer.id;
+                }
             }
         }
 
