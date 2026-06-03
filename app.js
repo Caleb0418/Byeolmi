@@ -668,12 +668,12 @@ window.BongBongCalculator = BongBongCalculator;
 
 // B2B 사용자 카카오 OAuth 인증 관리자 클래스
 class BongBongAuth {
-    static async signInWithKakao() {
+    static async signInWithKakao(redirectPath = '/client.html') {
         if (!supabase) return;
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'kakao',
             options: {
-                redirectTo: window.location.origin + '/client.html',
+                redirectTo: window.location.origin + redirectPath,
                 scopes: 'profile_nickname profile_image',
                 queryParams: {
                     scope: 'profile_nickname profile_image'
