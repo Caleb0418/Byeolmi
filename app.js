@@ -286,12 +286,34 @@ class BongBongStore {
         this.dispatchStorageChange();
     }
 
-    static isClosed() {
-        return localStorage.getItem("bb_is_closed") === "true";
+    static async isClosed() {
+        if (!supabase) return false;
+        try {
+            const { data, error } = await supabase
+                .from('system_settings')
+                .select('value')
+                .eq('key', 'is_closed')
+                .maybeSingle();
+            if (error) throw error;
+            return data ? data.value === 'true' : false;
+        } catch (err) {
+            console.error("Failed to check if closed:", err);
+            return false;
+        }
     }
 
-    static setClosedStatus(status) {
-        localStorage.setItem("bb_is_closed", status ? "true" : "false");
+    static async setClosedStatus(status) {
+        if (!supabase) return;
+        try {
+            const { error } = await supabase
+                .from('system_settings')
+                .update({ value: status ? 'true' : 'false' })
+                .eq('key', 'is_closed');
+            if (error) throw error;
+        } catch (err) {
+            console.error("Failed to set closed status:", err);
+            throw err;
+        }
         this.dispatchStorageChange();
     }
 
@@ -459,31 +481,129 @@ class BongBongStore {
         window.dispatchEvent(new Event('storage'));
     }
 
-    static getAnalyticsBuyers() {
-        const buyers = localStorage.getItem("bb_analytics_buyers");
-        if (!buyers) {
-            localStorage.setItem("bb_analytics_buyers", JSON.stringify(ANALYTICS_DATA.buyers));
+    static async getAnalyticsBuyers() {
+        if (!supabase) return ANALYTICS_DATA.buyers;
+        try {
+            const { data: dbBuyers, error: buyersError } = await supabase
+                .from('buyers')
+                .select('*');
+            if (buyersError) throw buyersError;
+
+            const orders = await this.getOrders();
+            const items = await this.getItems();
+
+            const buyerStats = {};
+            orders.forEach(order => {
+                const item = items.find(i => i.id === order.itemId);
+                const price = BongBongCalculator.getWholesaleUnitPrice(item, order.qty);
+                const subtotal = order.qty * price;
+
+                if (!buyerStats[order.buyerName]) {
+                    buyerStats[order.buyerName] = {
+                        qty: 0,
+                        revenue: 0,
+                        items: {}
+                    };
+                }
+                buyerStats[order.buyerName].qty += order.qty;
+                buyerStats[order.buyerName].revenue += subtotal;
+                buyerStats[order.buyerName].items[order.itemId] = (buyerStats[order.buyerName].items[order.itemId] || 0) + order.qty;
+            });
+
+            const resultBuyers = dbBuyers.map(buyer => {
+                const stats = buyerStats[buyer.name] || { qty: 0, revenue: 0, items: {} };
+                
+                let mainItem = "없음";
+                let maxQty = 0;
+                Object.entries(stats.items).forEach(([itemId, q]) => {
+                    if (q > maxQty) {
+                        maxQty = q;
+                        const item = items.find(i => i.id === itemId);
+                        mainItem = item ? item.name : itemId;
+                    }
+                });
+
+                return {
+                    name: buyer.name,
+                    mainItem: mainItem,
+                    qty: stats.qty,
+                    revenue: stats.revenue,
+                    status: buyer.status || "정상"
+                };
+            });
+
+            Object.keys(buyerStats).forEach(name => {
+                if (!resultBuyers.some(b => b.name === name)) {
+                    const stats = buyerStats[name];
+                    let mainItem = "없음";
+                    let maxQty = 0;
+                    Object.entries(stats.items).forEach(([itemId, q]) => {
+                        if (q > maxQty) {
+                            maxQty = q;
+                            const item = items.find(i => i.id === itemId);
+                            mainItem = item ? item.name : itemId;
+                        }
+                    });
+                    resultBuyers.push({
+                        name: name,
+                        mainItem: mainItem,
+                        qty: stats.qty,
+                        revenue: stats.revenue,
+                        status: "정상"
+                    });
+                }
+            });
+
+            return resultBuyers;
+        } catch (err) {
+            console.error("Failed to fetch analytics buyers:", err);
             return ANALYTICS_DATA.buyers;
         }
-        return JSON.parse(buyers);
     }
 
-    static saveAnalyticsBuyers(buyers) {
-        localStorage.setItem("bb_analytics_buyers", JSON.stringify(buyers));
-    }
-
-    static updateBuyerStatus(buyerName, newStatus) {
-        let buyers = this.getAnalyticsBuyers();
-        buyers = buyers.map(buyer => buyer.name === buyerName ? { ...buyer, status: newStatus } : buyer);
-        this.saveAnalyticsBuyers(buyers);
+    static async updateBuyerStatus(buyerName, newStatus) {
+        if (!supabase) return;
+        try {
+            const { error } = await supabase
+                .from('buyers')
+                .update({ status: newStatus })
+                .eq('name', buyerName);
+            if (error) throw error;
+        } catch (err) {
+            console.error("Failed to update buyer status:", err);
+            throw err;
+        }
         this.dispatchStorageChange();
     }
 
-    static getAnalyticsData() {
-        return {
-            ...ANALYTICS_DATA,
-            buyers: this.getAnalyticsBuyers()
-        };
+    static async getAnalyticsData() {
+        const buyers = await this.getAnalyticsBuyers();
+        if (!supabase) return { ...ANALYTICS_DATA, buyers };
+
+        try {
+            const { data: settlements, error } = await supabase
+                .from('settlements')
+                .select('*');
+            
+            if (error) throw error;
+
+            const monthly = { ...ANALYTICS_DATA.monthly };
+            const weekly = { ...ANALYTICS_DATA.weekly };
+            const daily = { ...ANALYTICS_DATA.daily };
+
+            return {
+                monthly,
+                weekly,
+                daily,
+                buyers
+            };
+        } catch (err) {
+            console.error("Failed to fetch analytics data:", err);
+            return {
+                ...ANALYTICS_DATA,
+                buyers
+            };
+        }
     }
 
     static async getBuyerTierBenefit(itemId, qty) {

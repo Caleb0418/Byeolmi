@@ -195,6 +195,7 @@
                 tbody.insertAdjacentHTML("beforeend", tr);
             }
 
+            if (count === 0) {
                 tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-gray-400">금일 접수된 발주 내역이 존재하지 않습니다.</td></tr>`;
             } else {
                 document.getElementById("invoice-total").textContent = `₩${totalBill.toLocaleString()}`;
