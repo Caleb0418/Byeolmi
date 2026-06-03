@@ -307,10 +307,25 @@ class BongBongStore {
 
         if (!supabase) throw new Error("Database not connected");
 
+        // RLS 정책 통과를 위해 현재 로그인된 유저의 buyer_id 조회
+        let buyerId = null;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data: buyerData } = await supabase
+                .from('buyers')
+                .select('id')
+                .eq('auth_uid', user.id)
+                .maybeSingle();
+            if (buyerData) {
+                buyerId = buyerData.id;
+            }
+        }
+
         const now = new Date();
         const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
         
         const dbOrder = {
+            buyer_id: buyerId,
             buyer_name: buyerName,
             item_id: itemId,
             qty: parsedQty,
