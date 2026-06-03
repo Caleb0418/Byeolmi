@@ -616,7 +616,8 @@ class BongBongAuth {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'kakao',
             options: {
-                redirectTo: window.location.origin + '/client.html'
+                redirectTo: window.location.origin + '/client.html',
+                scopes: 'profile_nickname profile_image'
             }
         });
         if (error) {
