@@ -647,6 +647,68 @@ class BongBongStore {
             throw new Error(error.message);
         }
     }
+
+    // (P3-3) 운영 설정(계좌/상호) — 하드코딩 제거. 테이블이 없거나 비어 있어도 기본값으로 안전 폴백.
+    static get DEFAULT_SETTINGS() {
+        return {
+            business_name: '별미집',
+            bank_name: '국민은행',
+            account_number: '646801-01-557728',
+            account_holder: '김봉준(우모유통)'
+        };
+    }
+
+    static async getSettings() {
+        const defaults = this.DEFAULT_SETTINGS;
+        if (!supabase) return { ...defaults };
+        try {
+            const { data, error } = await supabase
+                .from('app_settings')
+                .select('key, value');
+            if (error) throw error;
+            const map = { ...defaults };
+            (data || []).forEach(row => {
+                if (row.value) map[row.key] = row.value;
+            });
+            return map;
+        } catch (err) {
+            // app_settings 테이블 미생성 시에도 기본값으로 동작 (마이그레이션 전 안전)
+            console.error("Failed to fetch settings (기본값 사용):", err);
+            return { ...defaults };
+        }
+    }
+
+    static async updateSettings(entries) {
+        if (!supabase) return;
+        const rows = Object.entries(entries).map(([key, value]) => ({
+            key,
+            value: value == null ? '' : String(value),
+            updated_at: new Date().toISOString()
+        }));
+        const { error } = await supabase
+            .from('app_settings')
+            .upsert(rows, { onConflict: 'key' });
+        if (error) {
+            console.error("Failed to update settings:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
+    // 설정값으로부터 계좌 표기 문자열들을 생성 (표시 형식 일원화)
+    static formatAccount(settings) {
+        const s = settings || this.DEFAULT_SETTINGS;
+        const bank = s.bank_name || '';
+        const acct = s.account_number || '';
+        const holder = s.account_holder || '';
+        return {
+            bankAccount: `${bank} ${acct}`.trim(),              // 예: "국민은행 646801-01-557728"
+            holder,                                              // 예: "김봉준(우모유통)"
+            full: `${bank} ${acct} ${holder}`.trim(),           // 복사용 전체 문자열
+            digits: acct.replace(/[^0-9]/g, '')                 // 숫자만
+        };
+    }
+
     static async sendAlimtalk(buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl) {
         if (!supabase) throw new Error("Database not connected");
         const { data, error } = await supabase.functions.invoke('send-alimtalk', {

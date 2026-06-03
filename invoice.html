@@ -124,7 +124,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-xs font-bold text-gray-800" id="bank-info">국민은행 646801-01-557728</p>
-                    <p class="text-[10px] text-gray-400 mt-0.5">예금주: 김봉준(우모유통)</p>
+                    <p class="text-[10px] text-gray-400 mt-0.5">예금주: <span id="account-holder">김봉준(우모유통)</span></p>
                 </div>
                 <button onclick="copyAccount()" class="flex items-center gap-1 bg-neutralBg hover:bg-gray-100 border border-gray-200 text-[10px] font-bold px-2.5 py-1.5 rounded-lg active:scale-95 transition-all text-gray-600">
                     <span class="material-symbols-outlined text-xs">content_copy</span> 계좌 복사
@@ -149,6 +149,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 <script>
+    // (P3-3) 계좌/상호 설정 캐시 (copyAccount 등에서 재사용)
+    let invoiceSettings = null;
+
     document.addEventListener("DOMContentLoaded", async () => {
         // Query Params
         const params = new URLSearchParams(window.location.search);
@@ -164,6 +167,17 @@
         document.getElementById("buyer-title").textContent = `${buyer} 대표님`;
         const now = new Date();
         document.getElementById("invoice-date").textContent = `DATE: ${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+
+        // (P3-3) 운영 설정(계좌/상호) 로드 후 계좌 영역 바인딩 (실패 시 기본값 유지)
+        try {
+            invoiceSettings = await BongBongStore.getSettings();
+            const acct = BongBongStore.formatAccount(invoiceSettings);
+            document.getElementById("bank-info").textContent = acct.bankAccount;
+            const holderEl = document.getElementById("account-holder");
+            if (holderEl) holderEl.textContent = acct.holder;
+        } catch (e) {
+            console.error("설정 로드 실패(기본값 유지):", e);
+        }
 
         try {
             // Load Data
@@ -221,9 +235,12 @@
     });
 
     function copyAccount() {
-        const textToCopy = "국민은행 64680101557728 김봉준(우모유통)";
+        // (P3-3) 설정값 기반 복사 (미로드 시 기본값으로 안전 폴백)
+        const acct = BongBongStore.formatAccount(invoiceSettings);
+        const biz = (invoiceSettings && invoiceSettings.business_name) || BongBongStore.DEFAULT_SETTINGS.business_name;
+        const textToCopy = `${acct.bankAccount.replace(/-/g, '')} ${acct.holder}`.trim();
         navigator.clipboard.writeText(textToCopy).then(() => {
-            alert("별미집 결제계좌 정보가 클립보드에 복사되었습니다.\n\n* 복사된 내용: " + textToCopy);
+            alert(`${biz} 결제계좌 정보가 클립보드에 복사되었습니다.\n\n* 복사된 내용: ${textToCopy}`);
         }).catch(err => {
             console.error("복사 실패: ", err);
         });
