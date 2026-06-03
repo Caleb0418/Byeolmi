@@ -940,25 +940,27 @@ class BongBongAuth {
 
 window.BongBongAuth = BongBongAuth;
 
-const CRYPTO_SECRET = "bongbong-secret-key-1234567890";
-
+// 연락처 보호 정책 (P0-2)
+// - 기존에는 CryptoJS.AES 로 클라이언트에서 암호화했으나, 키(CRYPTO_SECRET)가 소스에 노출되어
+//   누구나 복호화 가능 → 실질적 보안 효과가 없었으므로 제거했다.
+// - 실제 보안 경계는 buyers 테이블의 RLS(소유자 또는 본인만 select/update 가능)가 담당한다.
+//   따라서 연락처는 평문으로 저장하고, 화면 노출 시에는 maskContact() 로 마스킹한다.
+// - encrypt/decrypt 는 호출부 호환을 위해 패스스루로 유지한다. (실제 변환 없음)
 class BongBongCrypt {
+    // 평문 저장 (RLS 로 보호). 호출부 호환용 패스스루.
     static encrypt(text) {
-        if (!text) return "";
-        if (typeof CryptoJS === 'undefined') return text;
-        return CryptoJS.AES.encrypt(text, CRYPTO_SECRET).toString();
+        return text || "";
     }
 
-    static decrypt(cipher) {
-        if (!cipher) return "";
-        if (typeof CryptoJS === 'undefined') return cipher;
-        try {
-            const bytes = CryptoJS.AES.decrypt(cipher, CRYPTO_SECRET);
-            return bytes.toString(CryptoJS.enc.Utf8);
-        } catch (e) {
-            console.error("Decryption failed:", e);
-            return cipher;
+    // 평문은 그대로 반환. 레거시 AES 암호문('Salted__' base64 → 'U2FsdGVk' 접두)은
+    // 키가 더 이상 존재하지 않아 복호화 불가하므로 빈 값으로 처리(재입력 유도).
+    static decrypt(value) {
+        if (!value) return "";
+        if (typeof value === 'string' && value.startsWith('U2FsdGVk')) {
+            console.warn("레거시 암호화 연락처는 복호화할 수 없습니다. 재입력이 필요합니다.");
+            return "";
         }
+        return value;
     }
 
     static maskContact(contact) {

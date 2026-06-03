@@ -40,3 +40,15 @@
 - `[x]` **[Phase 8] 최종 통합 시뮬레이션 및 깃 커밋**
   - `[x]` `test_bed.html`에서 통계 탭 및 테이블 일괄 편집의 모든 신규 고도화 기능 검증
   - `[x]` 변경 사항을 Atomic Commit에 따라 Git 저장소에 커밋 및 푸시
+
+- `[x]` **[Phase 9] P0 보안/데이터 정합성 하드닝 (배포 차단 항목)** — 상세: `docs/antigravity_progress.md`
+  - `[x]` (P0-1) `handle_new_user` 트리거의 owner 권한 백도어 제거 → `approved_owners` 화이트리스트 전용
+  - `[x]` (P0-2) `app.js` 클라이언트 측 하드코딩 암호화 키(`CRYPTO_SECRET`) 및 AES 제거, RLS+마스킹 정책 전환
+  - `[x]` (P0-3) `orders`/`settlements` `payment_status` 컬럼 정식 정의 (코드-스키마 드리프트 해소)
+  - `[x]` (P0-4) `supabase/migrations/` 마이그레이션 체계 도입 (이력 추적)
+  - `[ ]` (배포) 운영 DB에 마이그레이션 적용 + 레거시 암호문 점검 + 프론트 재배포 — 담당자 확인 필요
+
+- `[ ]` **[Phase 10] P1 PRD 핵심 기능 (다음 작업)**
+  - `[ ]` (P1-1) 알림톡 발송 실패 개별 재전송 UI/로직
+  - `[ ]` (P1-2) 발주 제출 시 구매자 주문요약 알림톡 (Solapi 템플릿 승인 필요)
+  - `[ ]` (P1-3) 분석 데이터(`ANALYTICS_DATA`) 실집계 기반 동적화

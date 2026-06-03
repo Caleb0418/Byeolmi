@@ -39,6 +39,8 @@ create table orders (
   qty        integer not null check (qty > 0),
   status     text not null default '대기'
              check (status in ('대기','승인','배송중','완료')),
+  payment_status text not null default '미수금'         -- 수금 상태 (대시보드 정산 관리)
+                 check (payment_status in ('미수금','수금완료')),
   time       text not null,                            -- 주문 시각 (예: '14:30')
   created_at timestamptz not null default now()
 );
@@ -52,6 +54,8 @@ create table settlements (
   detail         jsonb not null,                       -- 품목별 수량/확정단가 내역
   send_status    text not null default 'pending'
                  check (send_status in ('pending','sent','failed')),
+  payment_status text not null default '미수금'         -- 수금 상태 (대시보드 정산 관리)
+                 check (payment_status in ('미수금','수금완료')),
   sent_at        timestamptz,
   error_message  text,                                 -- 알림톡 발송 실패 사유
   created_at     timestamptz not null default now()
@@ -156,17 +160,18 @@ returns trigger as $$
 declare
   v_role text := 'buyer';
 begin
-  -- willy0418@naver.com 이거나 approved_owners 테이블에 등록된 이메일인 경우 owner 부여
-  if new.email = 'willy0418@naver.com' or new.email = 'seung@example.com' or new.email like '%seung%' or exists(select 1 from public.approved_owners where email = new.email) then
+  -- owner 권한은 approved_owners 테이블에 사전 등록된 이메일에만 부여 (화이트리스트 방식)
+  -- 주의: 이전의 like '%seung%' / 개인 이메일 하드코딩은 권한 상승 취약점이라 제거됨
+  if exists (select 1 from public.approved_owners where email = new.email) then
     v_role := 'owner';
   end if;
 
   insert into public.user_roles (id, role)
   values (new.id, v_role);
-  
+
   insert into public.buyers (auth_uid, name)
   values (new.id, coalesce(new.raw_user_meta_data->>'name', '신규 거래처'));
-  
+
   return new;
 end;
 $$ language plpgsql security definer;
@@ -266,6 +271,11 @@ $$;
 
 
 -- 5. 테스트용 시드(Seed) 데이터 주입
+-- 5-0. 초기 사장님(owner) 화이트리스트 등록 (handle_new_user 트리거가 참조)
+insert into approved_owners (email) values
+('willy0418@naver.com')
+on conflict (email) do nothing;
+
 -- 5-1. 기본 품목 추가
 insert into items (id, category, name, base_price, unit, is_available) values
 ('potato', 'fresh', '골드 감자', 20000, '박스', true),
