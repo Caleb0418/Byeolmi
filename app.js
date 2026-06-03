@@ -893,7 +893,8 @@ class BongBongAuth {
                 redirectTo: window.location.origin + redirectPath,
                 scopes: 'profile_nickname profile_image',
                 queryParams: {
-                    scope: 'profile_nickname profile_image'
+                    scope: 'profile_nickname profile_image',
+                    prompt: 'select_account'
                 }
             }
         });
