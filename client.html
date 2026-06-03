@@ -142,14 +142,14 @@
             <form id="buyer-info-form" class="space-y-4" onsubmit="event.preventDefault(); handleStep2Submit();">
                 <!-- Buyer Name -->
                 <div>
-                    <label class="block text-[11px] font-bold text-gray-400 mb-1">발주 등록 대표자명 / 업체명</label>
+                    <label class="block text-xs font-bold text-gray-400 mb-1">발주 등록 대표자명 / 업체명</label>
                     <input type="text" id="buyer-name" required placeholder="예: 박민지 (마트유통)" 
                            class="w-full rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark text-sm py-3 px-4">
                 </div>
 
                 <!-- Buyer Phone Number -->
                 <div>
-                    <label class="block text-[11px] font-bold text-gray-400 mb-1">대표자 휴대폰 번호 (알림톡 전송용)</label>
+                    <label class="block text-xs font-bold text-gray-400 mb-1">대표자 휴대폰 번호 (알림톡 전송용)</label>
                     <input type="tel" id="buyer-contact" required placeholder="예: 010-1234-5678" 
                            class="w-full rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark text-sm py-3 px-4">
                 </div>
@@ -482,7 +482,7 @@
                     <div class="p-4 border border-gray-100 rounded-xl bg-white flex items-center justify-between hover:shadow-sm transition-all ${opacityClass}">
                         <div>
                             <h4 class="font-bold text-gray-900 text-sm">${item.name}</h4>
-                            <p class="text-[10px] text-gray-400 mt-0.5">단위: ${item.unit}</p>
+                            <p class="text-xs text-gray-400 mt-0.5">단위: ${item.unit}</p>
                         </div>
                         <div class="flex items-center gap-3">
                             ${qtyControllerHtml}
