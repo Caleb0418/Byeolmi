@@ -106,7 +106,11 @@
 ## ⏳ 남은 작업 (Antigravity가 이어서 진행)
 
 ### 🟢 P3 — 운영 준비
-- P3-1 배포 파이프라인 · P3-2 알림톡 템플릿 심사 · P3-3 온보딩 UX
+- **P3-1 배포 (부분 완료)**: 프론트는 Vercel에 배포됨. `vercel.json` 추가로 **보안 헤더**(HSTS·X-Frame-Options·nosniff·Referrer-Policy·Permissions-Policy) 적용.
+  - **CSP는 의도적으로 제외**: 앱이 인라인 `onclick` 핸들러를 대량 사용하고 Tailwind Play CDN을 쓰기 때문에 엄격한 CSP는 `'unsafe-inline'`/`'unsafe-eval'`이 불가피해 실효성이 낮고 사이트 파손 위험이 큼. 인라인 핸들러를 이벤트 바인딩으로 리팩터링한 뒤 nonce 기반 CSP 도입을 후속 과제로 둔다.
+  - 남은 일: GitHub Actions(테스트 자동화), `.env.example`/키 주입 정리.
+- **P3-2 알림톡 템플릿 심사**: 카카오 비즈니스 템플릿 2종(정산/발주확인) 승인 — 운영자 영역.
+- **P3-3 온보딩 UX**: 계좌/상호 하드코딩(4곳) → 설정 분리, 품목 0개 빈 상태 안내 — 코드 작업 남음.
 
 ---
 
