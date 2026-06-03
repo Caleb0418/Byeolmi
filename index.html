@@ -850,7 +850,7 @@
             try {
                 const items = await BongBongStore.getItems();
                 const orders = await BongBongStore.getOrders();
-                const isClosed = BongBongStore.isClosed();
+                const isClosed = await BongBongStore.isClosed();
 
                 // 0. 일괄 수정 버튼 상태 업데이트
                 const bulkEditBtn = document.getElementById("bulk-edit-btn");
@@ -1225,7 +1225,8 @@
                     }
 
                     const buyerObj = buyersMap[buyerName];
-                    const contact = buyerObj ? buyerObj.contact : '010-0000-0000'; // Default fallback
+                    const rawContact = buyerObj ? buyerObj.contact : '';
+                    const contact = rawContact ? BongBongCrypt.decrypt(rawContact) : '010-0000-0000';
                     const invoiceUrl = window.location.origin + `/invoice.html?buyer=${encodeURIComponent(buyerName)}`;
 
                     const today = new Date();
@@ -1404,7 +1405,7 @@
 
     async function renderAnalyticsBoard() {
         try {
-            const data = BongBongStore.getAnalyticsData();
+            const data = await BongBongStore.getAnalyticsData();
             const tbody = document.getElementById("analytics-buyers-body");
             tbody.innerHTML = "";
             
@@ -1465,8 +1466,8 @@
                 tbody.insertAdjacentHTML("beforeend", tr);
             });
 
-            buildSalesTrendChart('monthly');
-            buildProductShareChart();
+            buildSalesTrendChart('monthly', data);
+            await buildProductShareChart();
         } catch (err) {
             console.error("Failed to render analytics board:", err);
         }
@@ -1474,7 +1475,7 @@
 
     window.changeBuyerStatus = async function(buyerName, selectValue) {
         if (selectValue === "미수금_입력") {
-            const currentData = BongBongStore.getAnalyticsBuyers();
+            const currentData = await BongBongStore.getAnalyticsBuyers();
             const buyer = currentData.find(b => b.name === buyerName);
             const currentStatus = buyer ? buyer.status : "";
             const currentPrice = currentStatus.includes("미수금") ? currentStatus.replace("미수금", "").trim() : "₩120,000";
@@ -1486,19 +1487,20 @@
             }
             const cleanMoney = moneyInput.trim();
             if (cleanMoney === "") {
-                BongBongStore.updateBuyerStatus(buyerName, "정상");
+                await BongBongStore.updateBuyerStatus(buyerName, "정상");
             } else {
                 const formattedMoney = cleanMoney.startsWith("₩") ? cleanMoney : "₩" + cleanMoney;
-                BongBongStore.updateBuyerStatus(buyerName, "미수금 " + formattedMoney);
+                await BongBongStore.updateBuyerStatus(buyerName, "미수금 " + formattedMoney);
             }
         } else {
-            BongBongStore.updateBuyerStatus(buyerName, "정상");
+            await BongBongStore.updateBuyerStatus(buyerName, "정상");
         }
         await renderAnalyticsBoard();
     };
 
-    window.updateChartType = function(period) {
-        buildSalesTrendChart(period);
+    window.updateChartType = async function(period) {
+        const data = await BongBongStore.getAnalyticsData();
+        buildSalesTrendChart(period, data);
         
         const btnMonthly = document.getElementById("btn-chart-monthly");
         const btnWeekly = document.getElementById("btn-chart-weekly");
@@ -1517,11 +1519,10 @@
         }
     };
 
-    function buildSalesTrendChart(period) {
+    function buildSalesTrendChart(period, allData) {
         const canvas = document.getElementById("sales-trend-chart");
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
-        const allData = BongBongStore.getAnalyticsData();
         const periodData = allData[period];
 
         if (salesChartInstance) salesChartInstance.destroy();
@@ -1581,37 +1582,70 @@
         });
     }
 
-    function buildProductShareChart() {
+    async function buildProductShareChart() {
         const canvas = document.getElementById("product-share-chart");
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
         if (shareChartInstance) shareChartInstance.destroy();
 
-        const shareLabels = ['골드 감자 (55%)', '깐마늘 XL (20%)', '햇 양파 (15%)', '기타 (10%)'];
-        shareChartInstance = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: shareLabels,
-                datasets: [{
-                    data: [55, 20, 15, 10],
-                    backgroundColor: ['#002045', '#0a6c44', '#adc7f7', '#dde3eb']
-                }]
-            },
-            options: { 
-                responsive: true, 
-                maintainAspectRatio: false,
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const value = context.parsed;
-                                return ` 비중: ${value}%`;
+        try {
+            const items = await BongBongStore.getItems();
+            const orders = await BongBongStore.getOrders();
+            
+            const productVolumes = {};
+            let totalVolume = 0;
+
+            orders.forEach(o => {
+                const item = items.find(i => i.id === o.itemId);
+                const itemName = item ? item.name : o.itemId;
+                productVolumes[itemName] = (productVolumes[itemName] || 0) + o.qty;
+                totalVolume += o.qty;
+            });
+
+            const shareLabels = [];
+            const shareData = [];
+            const colors = ['#002045', '#0a6c44', '#adc7f7', '#dde3eb', '#fcd34d', '#f87171', '#a78bfa'];
+
+            if (totalVolume === 0) {
+                shareLabels.push("접수된 주문 없음");
+                shareData.push(100);
+            } else {
+                Object.entries(productVolumes).forEach(([name, qty]) => {
+                    const percent = Math.round((qty / totalVolume) * 100);
+                    shareLabels.push(`${name} (${percent}%)`);
+                    shareData.push(percent);
+                });
+            }
+
+            const backgroundColors = shareData.map((_, index) => colors[index % colors.length]);
+
+            shareChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: shareLabels,
+                    datasets: [{
+                        data: shareData,
+                        backgroundColor: backgroundColors
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed;
+                                    return ` 비중: ${value}%`;
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        } catch (err) {
+            console.error("Failed to build product share chart:", err);
+        }
     }
 
     const modalProductList = document.getElementById("modal-product-list");
@@ -1936,7 +1970,7 @@
 
     window.openSalesDetailModal = async function() {
         try {
-            const data = BongBongStore.getAnalyticsData();
+            const data = await BongBongStore.getAnalyticsData();
             const orders = await BongBongStore.getOrders();
             const todayRevenue = await BongBongCalculator.getProjectedRevenue();
             const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
@@ -2032,7 +2066,7 @@
 
     window.openTicketDetailModal = async function() {
         try {
-            const data = BongBongStore.getAnalyticsData();
+            const data = await BongBongStore.getAnalyticsData();
             const items = await BongBongStore.getItems();
             const orders = await BongBongStore.getOrders();
             
@@ -2080,7 +2114,7 @@
 
     window.openActiveBuyersModal = async function() {
         try {
-            const data = BongBongStore.getAnalyticsData();
+            const data = await BongBongStore.getAnalyticsData();
             const items = await BongBongStore.getItems();
             const orders = await BongBongStore.getOrders();
 

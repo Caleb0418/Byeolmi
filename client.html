@@ -231,6 +231,37 @@
         const qtyInput = document.getElementById("qty-input");
         const orderForm = document.getElementById("order-form");
 
+        // 0-0. 마감 여부 실시간 확인 및 UI 차단
+        async function checkClosedStatus() {
+            try {
+                const isClosed = await BongBongStore.isClosed();
+                const closedAlert = document.getElementById("closed-alert");
+                const submitBtn = document.getElementById("submit-btn");
+                const buyerInput = document.getElementById("buyer-name");
+                const contactInput = document.getElementById("buyer-contact");
+                const qtyMinus = document.getElementById("qty-minus");
+                const qtyPlus = document.getElementById("qty-plus");
+
+                if (isClosed) {
+                    if (closedAlert) closedAlert.classList.remove("hidden");
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.className = "w-full bg-gray-350 text-gray-500 font-bold py-4 rounded-xl shadow-sm text-sm cursor-not-allowed flex items-center justify-center gap-2";
+                        submitBtn.innerHTML = `<span class="material-symbols-outlined text-sm">block</span> 금일 발주가 마감되었습니다`;
+                    }
+                    if (buyerInput) buyerInput.disabled = true;
+                    if (contactInput) contactInput.disabled = true;
+                    if (itemSelect) itemSelect.disabled = true;
+                    if (qtyInput) qtyInput.disabled = true;
+                    if (qtyMinus) qtyMinus.disabled = true;
+                    if (qtyPlus) qtyPlus.disabled = true;
+                }
+            } catch (err) {
+                console.error("Failed to check closed status:", err);
+            }
+        }
+        await checkClosedStatus();
+
         // 0. Buyer 권한 및 프로필 자동 로드 (비로그인 발주는 입력 허용)
         async function checkClientAuth() {
             if (!supabase) return;
