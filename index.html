@@ -372,7 +372,10 @@
                                 </tr>
                             </thead>
                             <tbody id="order-table-body" class="divide-y divide-gray-100">
-                                <!-- Dynamic rendering -->
+                                <tr><td colspan="6" class="px-6 py-10 text-center text-gray-400 text-sm">
+                                    <span class="material-symbols-outlined animate-spin align-middle text-base">sync</span>
+                                    <span class="align-middle ml-1">실시간 취합 내역을 불러오는 중...</span>
+                                </td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -389,7 +392,9 @@
                             <button onclick="switchTab('products')" class="text-xs text-primary font-bold hover:underline">편집</button>
                         </div>
                         <div id="price-trackers-container" class="space-y-6">
-                            <!-- Dynamic price tiers progress -->
+                            <div class="flex items-center justify-center gap-2 py-8 text-gray-400 text-sm">
+                                <span class="material-symbols-outlined animate-spin text-base">sync</span> 불러오는 중...
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -450,6 +455,9 @@
                     </div>
                     <!-- Chart canvas wrapper -->
                     <div class="flex-1 min-h-[300px] relative">
+                        <div id="sales-chart-loading" class="absolute inset-0 flex items-center justify-center gap-2 text-gray-400 text-sm">
+                            <span class="material-symbols-outlined animate-spin text-base">sync</span> 그래프를 불러오는 중...
+                        </div>
                         <canvas id="sales-trend-chart"></canvas>
                     </div>
                 </section>
@@ -461,6 +469,9 @@
                         주요 품목별 판매 비중
                     </h3>
                     <div class="relative min-h-[220px] flex items-center justify-center">
+                        <div id="share-chart-loading" class="absolute inset-0 flex items-center justify-center gap-2 text-gray-400 text-sm">
+                            <span class="material-symbols-outlined animate-spin text-base">sync</span> 불러오는 중...
+                        </div>
                         <canvas id="product-share-chart"></canvas>
                     </div>
                 </section>
@@ -1308,6 +1319,18 @@
                 }
             } catch (err) {
                 console.error("Dashboard render error:", err);
+                // 로딩 스피너가 영원히 도는 것을 방지 — 에러 상태 + 재시도 안내로 교체
+                if (orderTableBody) {
+                    orderTableBody.innerHTML = `<tr><td colspan="6" class="px-6 py-10 text-center text-red-500 text-sm">
+                        취합 내역을 불러오지 못했습니다.
+                        <button onclick="window.renderAdminDashboard && window.renderAdminDashboard(true)" class="ml-1 underline font-bold">다시 시도</button>
+                    </td></tr>`;
+                }
+                if (priceTrackersContainer) {
+                    priceTrackersContainer.innerHTML = `<div class="py-8 text-center text-red-500 text-sm">불러오지 못했습니다.
+                        <button onclick="window.renderAdminDashboard && window.renderAdminDashboard(true)" class="ml-1 underline font-bold">다시 시도</button></div>`;
+                }
+                window.BongBongUI && window.BongBongUI.toast("대시보드 데이터를 불러오지 못했습니다.", 'error');
             }
         };
 
@@ -1958,6 +1981,7 @@
     function buildSalesTrendChart(period, allData) {
         const canvas = document.getElementById("sales-trend-chart");
         if (!canvas) return;
+        document.getElementById("sales-chart-loading")?.remove();
         const ctx = canvas.getContext("2d");
 
         // 항상 실제 주문 데이터로 집계 (P1-3). 데이터가 없으면 0으로 채워진 실제 빈 상태가 표시된다.
@@ -2023,6 +2047,7 @@
     async function buildProductShareChart() {
         const canvas = document.getElementById("product-share-chart");
         if (!canvas) return;
+        document.getElementById("share-chart-loading")?.remove();
         const ctx = canvas.getContext("2d");
         if (shareChartInstance) shareChartInstance.destroy();
 
