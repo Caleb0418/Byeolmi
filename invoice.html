@@ -16,6 +16,8 @@
             theme: {
                 extend: {
                     colors: {
+                        primary: '#002045',
+                        secondary: '#0a6c44',
                         brandDark: '#111111',
                         brandAccent: '#0a6c44',
                         neutralBg: '#f8f9fa'
@@ -66,7 +68,7 @@
         <!-- Header -->
         <div class="text-center pb-6 border-b-2 border-dashed border-gray-200">
             <span class="text-xs tracking-widest text-brandAccent font-bold block mb-1">WHOLESALE INVOICE</span>
-            <h1 class="font-serif text-2xl font-bold tracking-tight text-brandDark">별미집 정산 명세서</h1>
+            <h1 class="font-serif text-2xl font-bold tracking-tight text-primary">별미집 정산 명세서</h1>
             <p class="text-[10px] text-gray-400 mt-2 font-mono" id="invoice-date">DATE: --.--.--</p>
         </div>
 
@@ -184,14 +186,16 @@
             const items = await BongBongStore.getItems();
             const orders = await BongBongStore.getOrders();
 
-            // 1. 해당 거래처의 주문 수량 집계
+            // 1. 해당 거래처의 주문 수량 집계 + 입금/배송 상태 수집
             const itemQtyMap = {};
+            const buyerStatuses = [];
             orders.forEach(o => {
                 if (o.buyerName === buyer) {
                     if (!itemQtyMap[o.itemId]) {
                         itemQtyMap[o.itemId] = 0;
                     }
                     itemQtyMap[o.itemId] += o.qty;
+                    buyerStatuses.push(o.status);
                 }
             });
 
@@ -227,6 +231,17 @@
                 tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-gray-400">금일 접수된 발주 내역이 존재하지 않습니다.</td></tr>`;
             } else {
                 document.getElementById("invoice-total").textContent = `₩${totalBill.toLocaleString()}`;
+            }
+
+            // 3. 정산(입금) 상태 동적 표기: 거래처의 모든 주문이 배송중/완료면 '입금 완료', 아니면 '입금 대기'
+            const statusEl = document.getElementById("payment-status");
+            if (statusEl) {
+                const paidStates = ["배송중", "완료"];
+                const isPaid = buyerStatuses.length > 0 && buyerStatuses.every(s => paidStates.includes(s));
+                statusEl.textContent = isPaid ? "입금 완료" : "입금 대기";
+                statusEl.className = isPaid
+                    ? "px-2 py-0.5 rounded text-xs font-bold bg-green-50 text-green-700 border border-green-200"
+                    : "px-2 py-0.5 rounded text-xs font-bold bg-yellow-50 text-yellow-700 border border-yellow-200";
             }
         } catch (err) {
             console.error("Failed to load invoice:", err);

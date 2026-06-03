@@ -501,7 +501,9 @@
             <form id="manual-order-form" class="space-y-4">
                 <div>
                     <label class="block text-sm font-bold text-gray-500 mb-1">거래처 이름</label>
-                    <input type="text" id="manual-buyer-name" required placeholder="예: 무지개 식자재" class="w-full rounded-xl border-gray-200 focus:border-primary focus:ring-primary text-sm">
+                    <input type="text" id="manual-buyer-name" required placeholder="입력하거나 기존 거래처 선택" list="buyer-name-suggestions" autocomplete="off" class="w-full rounded-xl border-gray-200 focus:border-primary focus:ring-primary text-sm">
+                    <datalist id="buyer-name-suggestions"></datalist>
+                    <p class="text-xs text-gray-400 mt-1">최근 거래처가 자동 추천됩니다. 오타로 인한 정산 분리를 막아주세요.</p>
                 </div>
                 <div>
                     <label class="block text-sm font-bold text-gray-500 mb-1">품목</label>
@@ -1151,7 +1153,7 @@
                 }
                 if (approveOrdersBtn) {
                     approveOrdersBtn.disabled = false;
-                    approveOrdersBtn.className = "flex items-center gap-2 px-6 h-12 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-md transition-all";
+                    approveOrdersBtn.className = "flex-1 md:flex-none flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 h-10 md:h-12 rounded-xl bg-indigo-600 text-white font-bold text-xs md:text-sm whitespace-nowrap hover:bg-indigo-700 shadow-md transition-all";
                 }
 
                 // 승인 대기 주문 카드 정보 업데이트
@@ -1286,6 +1288,23 @@
                     opt.textContent = i.name;
                     manualItemSelect.appendChild(opt);
                 });
+
+                // 거래처명 자동완성: 기존 주문에서 중복 제거한 거래처 목록을 최신순으로 datalist에 채움 (오타 정산분리 방지, 닐슨 #6)
+                const buyerDatalist = document.getElementById("buyer-name-suggestions");
+                if (buyerDatalist) {
+                    const seen = new Set();
+                    const recentBuyers = [];
+                    for (let i = orders.length - 1; i >= 0; i--) {
+                        const name = (orders[i].buyerName || "").trim();
+                        if (name && !seen.has(name)) {
+                            seen.add(name);
+                            recentBuyers.push(name);
+                        }
+                    }
+                    buyerDatalist.innerHTML = recentBuyers
+                        .map(name => `<option value="${name.replace(/"/g, "&quot;")}"></option>`)
+                        .join("");
+                }
             } catch (err) {
                 console.error("Dashboard render error:", err);
             }
