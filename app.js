@@ -587,30 +587,27 @@ class BongBongStore {
 
     static async getAnalyticsData() {
         const buyers = await this.getAnalyticsBuyers();
-        if (!supabase) return { ...ANALYTICS_DATA, buyers };
+        if (!supabase) return { ...ANALYTICS_DATA, buyers, orders: [], items: [] };
 
         try {
-            const { data: settlements, error } = await supabase
-                .from('settlements')
-                .select('*');
-            
-            if (error) throw error;
-
-            const monthly = { ...ANALYTICS_DATA.monthly };
-            const weekly = { ...ANALYTICS_DATA.weekly };
-            const daily = { ...ANALYTICS_DATA.daily };
+            const orders = await this.getOrders();
+            const items = await this.getItems();
 
             return {
-                monthly,
-                weekly,
-                daily,
-                buyers
+                monthly: ANALYTICS_DATA.monthly,
+                weekly: ANALYTICS_DATA.weekly,
+                daily: ANALYTICS_DATA.daily,
+                buyers,
+                orders,
+                items
             };
         } catch (err) {
             console.error("Failed to fetch analytics data:", err);
             return {
                 ...ANALYTICS_DATA,
-                buyers
+                buyers,
+                orders: [],
+                items: []
             };
         }
     }
