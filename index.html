@@ -68,6 +68,35 @@
             border: 1px solid rgba(255, 255, 255, 0.5) !important;
             box-shadow: 0 8px 32px 0 rgba(0, 32, 69, 0.04) !important;
         }
+        /* 모바일: 6열 주문 테이블을 카드형 스택으로 전환 (가로 스크롤 제거) */
+        @media (max-width: 767px) {
+            .responsive-orders thead { display: none; }
+            .responsive-orders tbody { display: block; }
+            .responsive-orders tr {
+                display: block;
+                height: auto !important;
+                border: 1px solid #e5e7eb;
+                border-radius: 0.75rem;
+                margin-bottom: 0.75rem;
+                padding: 0.25rem 0.25rem;
+                background: #fff;
+            }
+            .responsive-orders td {
+                display: block;
+                text-align: left !important;
+                padding: 0.4rem 1rem !important;
+                border: 0 !important;
+            }
+            .responsive-orders td::before {
+                content: attr(data-label);
+                display: block;
+                font-size: 0.7rem;
+                font-weight: 700;
+                color: #9ca3af;
+                margin-bottom: 2px;
+            }
+            .responsive-orders td[data-label=""] { display: none; }
+        }
     </style>
 </head>
 <body class="bg-background text-[#121c2c] flex min-h-screen">
@@ -124,7 +153,7 @@
 <!-- Main Area -->
 <main class="flex-1 flex flex-col min-w-0 bg-transparent overflow-y-auto">
     <!-- Top Nav Controls -->
-    <header class="flex justify-between items-center w-full px-4 md:px-10 h-16 md:h-24 bg-white/40 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-30">
+    <header class="flex flex-col md:flex-row md:justify-between md:items-center gap-3 w-full px-4 md:px-10 py-3 md:py-0 md:h-24 bg-white/40 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-30">
         <div class="flex items-center gap-3">
             <!-- Hamburger button for mobile -->
             <button onclick="toggleSidebar(true)" class="lg:hidden flex items-center justify-center p-2 rounded-xl text-primary hover:bg-gray-100/50 transition-all" aria-label="메뉴 열기">
@@ -135,13 +164,13 @@
                 <p class="text-[10px] md:text-sm text-gray-500" id="current-date">로딩 중...</p>
             </div>
         </div>
-        <div class="flex gap-2 md:gap-4">
-            <button id="approve-orders-btn" class="flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 h-10 md:h-12 rounded-xl bg-indigo-600 text-white font-bold text-xs md:text-sm hover:bg-indigo-700 shadow-md transition-all">
+        <div class="flex gap-2 md:gap-4 w-full md:w-auto">
+            <button id="approve-orders-btn" class="flex-1 md:flex-none flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 h-10 md:h-12 rounded-xl bg-indigo-600 text-white font-bold text-xs md:text-sm whitespace-nowrap hover:bg-indigo-700 shadow-md transition-all">
                 <span class="material-symbols-outlined text-sm md:text-base">assignment_turned_in</span>
                 <span class="hidden sm:inline">지금까지 들어온 발주 승인하기</span>
                 <span class="sm:hidden">발주 승인</span>
             </button>
-            <button id="send-settle-btn" class="flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 h-10 md:h-12 rounded-xl bg-secondary text-white font-bold text-xs md:text-sm hover:bg-opacity-90 shadow-md">
+            <button id="send-settle-btn" class="flex-1 md:flex-none flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 h-10 md:h-12 rounded-xl bg-secondary text-white font-bold text-xs md:text-sm whitespace-nowrap hover:bg-opacity-90 shadow-md">
                 <span class="material-symbols-outlined text-sm md:text-base">send</span>
                 <span class="hidden sm:inline">정산 알림톡 일괄 발송</span>
                 <span class="sm:hidden">알림톡 발송</span>
@@ -328,7 +357,7 @@
                         </div>
                     </div>
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
+                        <table class="w-full text-left border-collapse responsive-orders">
                             <thead>
                                 <tr class="bg-gray-50 border-b border-gray-200">
                                     <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">구매자명</th>
@@ -1178,23 +1207,23 @@
 
                         tr = `
                             <tr class="bg-blue-50/20 border-b border-blue-100 h-16" data-order-id="${order.id}">
-                                <td class="px-6 py-2">
+                                <td data-label="구매자명" class="px-6 py-2">
                                     <input type="text" id="edit-row-buyer-${order.id}" value="${order.buyerName}" class="w-full text-xs font-bold border-gray-200 rounded-xl p-1.5 focus:border-primary focus:ring-primary">
                                 </td>
-                                <td class="px-6 py-2">
+                                <td data-label="품목" class="px-6 py-2">
                                     <select id="edit-row-item-${order.id}" class="w-full text-xs border-gray-200 rounded-xl p-1.5 focus:border-primary focus:ring-primary">
                                         ${itemOptions}
                                     </select>
                                 </td>
-                                <td class="px-6 py-2 flex items-center gap-1 mt-1 border-0">
+                                <td data-label="수량" class="px-6 py-2 flex items-center gap-1 mt-1 border-0">
                                     <input type="number" id="edit-row-qty-${order.id}" value="${order.qty}" min="1" class="w-16 text-xs font-semibold border-gray-200 rounded-xl p-1.5 focus:border-primary focus:ring-primary">
                                     <span class="text-xs text-gray-500 font-bold">${item ? item.unit : '박스'}</span>
                                 </td>
-                                <td class="px-6 py-2 text-xs text-gray-400 font-mono">${order.time}</td>
-                                <td class="px-6 py-2">
+                                <td data-label="접수시각" class="px-6 py-2 text-xs text-gray-400 font-mono">${order.time}</td>
+                                <td data-label="상태" class="px-6 py-2">
                                     <span class="px-3 py-1.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 whitespace-nowrap">편집중</span>
                                 </td>
-                                <td class="px-6 py-2 text-right">
+                                <td data-label="삭제" class="px-6 py-2 text-right">
                                     <button onclick="deleteRow(${order.id})" class="text-red-500 hover:text-red-700 flex items-center justify-end ml-auto" title="이 주문 삭제">
                                         <span class="material-symbols-outlined text-lg">close</span>
                                     </button>
@@ -1204,11 +1233,11 @@
                     } else {
                         tr = `
                             <tr class="hover:bg-gray-50 transition-colors h-16">
-                                <td class="px-6 py-4 font-bold text-sm text-gray-900">${order.buyerName}</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">${item ? item.name : order.itemId}</td>
-                                <td class="px-6 py-4 text-sm font-semibold whitespace-nowrap">${order.qty} ${item ? item.unit : '박스'}</td>
-                                <td class="px-6 py-4 text-sm text-gray-400 font-mono">${order.time}</td>
-                                <td class="px-6 py-4">
+                                <td data-label="구매자명" class="px-6 py-4 font-bold text-sm text-gray-900">${order.buyerName}</td>
+                                <td data-label="품목" class="px-6 py-4 text-sm text-gray-600">${item ? item.name : order.itemId}</td>
+                                <td data-label="수량" class="px-6 py-4 text-sm font-semibold whitespace-nowrap">${order.qty} ${item ? item.unit : '박스'}</td>
+                                <td data-label="접수시각" class="px-6 py-4 text-sm text-gray-400 font-mono">${order.time}</td>
+                                <td data-label="상태" class="px-6 py-4">
                                     <select onchange="changeOrderStatus(${order.id}, this.value)" class="text-xs font-bold rounded-full pr-8 pl-3.5 py-1.5 border-0 outline-none focus:ring-0 appearance-none text-left ${statusColor} cursor-pointer bg-[right_0.5rem_center] bg-no-repeat bg-[length:12px_12px] min-w-[90px] whitespace-nowrap">
                                         <option value="대기" ${order.status === '대기' ? 'selected' : ''}>대기</option>
                                         <option value="승인" ${order.status === '승인' ? 'selected' : ''}>승인</option>
@@ -1216,7 +1245,7 @@
                                         <option value="완료" ${order.status === '완료' ? 'selected' : ''}>완료</option>
                                     </select>
                                 </td>
-                                <td class="px-6 py-4 text-right text-gray-300">-</td>
+                                <td data-label="" class="px-6 py-4 text-right text-gray-300 max-md:hidden">-</td>
                             </tr>
                         `;
                     }
