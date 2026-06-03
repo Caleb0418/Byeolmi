@@ -345,6 +345,25 @@
         await renderPage();
         updateFloatingBar();
 
+        // 휴대폰 번호 실시간 하이픈 자동 포맷팅
+        const contactInput = document.getElementById("buyer-contact");
+        if (contactInput) {
+            contactInput.addEventListener("input", (e) => {
+                const cleaned = e.target.value.replace(/[^0-9]/g, '');
+                let formatted = cleaned;
+                if (cleaned.length > 3 && cleaned.length <= 7) {
+                    formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+                } else if (cleaned.length > 7) {
+                    if (cleaned.length === 10) {
+                        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+                    } else {
+                        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7, 11)}`;
+                    }
+                }
+                e.target.value = formatted;
+            });
+        }
+
         // Supabase Realtime 구독 설정
         if (supabase) {
             supabase
