@@ -48,7 +48,11 @@
   - `[x]` (P0-4) `supabase/migrations/` 마이그레이션 체계 도입 (이력 추적)
   - `[ ]` (배포) 운영 DB에 마이그레이션 적용 + 레거시 암호문 점검 + 프론트 재배포 — 담당자 확인 필요
 
-- `[ ]` **[Phase 10] P1 PRD 핵심 기능 (다음 작업)**
-  - `[ ]` (P1-1) 알림톡 발송 실패 개별 재전송 UI/로직
-  - `[ ]` (P1-2) 발주 제출 시 구매자 주문요약 알림톡 (Solapi 템플릿 승인 필요)
-  - `[ ]` (P1-3) 분석 데이터(`ANALYTICS_DATA`) 실집계 기반 동적화
+- `[x]` **[Phase 10] P1 PRD 핵심 기능** — 상세: `docs/antigravity_progress.md`
+  - `[x]` (P1-1) 알림톡 발송 실패 개별 재전송 UI/로직 (정산 모달 + `resendAlimtalk`)
+  - `[x]` (P1-2) 발주 제출 시 구매자 주문요약 알림톡 (코드 경로 구현, fail-safe)
+    - `[ ]` (배포) Solapi 발주확인 템플릿 승인 + `SOLAPI_ORDER_TEMPLATE_ID` 설정 + Edge Function 재배포
+  - `[x]` (P1-3) 분석 데이터(`ANALYTICS_DATA`) 실집계 기반 동적화 + 빈 상태 처리
+
+- `[ ]` **[Phase 11] P2 안정성/품질 (다음 작업)**
+  - `[ ]` (P2-1) 테스트 보강(80% 목표) · (P2-2) silent failure 제거 · (P2-3) 폴링→Realtime · (P2-4) 고령 사용자 접근성

@@ -685,6 +685,11 @@
             const itemsSummaryTxt = summaryDetails.join(", ");
             const totalQty = Array.from(selectedItems.values()).reduce((sum, q) => sum + q, 0);
 
+            // (P1-2) 구매자에게 발주 접수 확인 알림톡 발송 (fail-safe: 실패해도 발주는 성공 처리)
+            const orderConfirmSummary = summaryDetails.map(d => `- ${d}`).join("\n");
+            BongBongStore.sendOrderConfirmation(buyerName, buyerContact, orderConfirmSummary)
+                .catch(err => console.warn("발주 확인 알림톡 발송 실패(발주는 정상 접수됨):", err));
+
             openOrderSuccessDrawer(buyerName, itemsSummaryTxt, totalQty);
 
             selectedItems.clear();

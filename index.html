@@ -767,6 +767,13 @@
                         <span class="text-md font-bold text-gray-700" id="settlement-modal-count">0건</span>
                     </div>
                 </div>
+                <!-- (P1-1) 알림톡 발송 실패 건 재전송 영역 (실패 건이 있을 때만 노출) -->
+                <div id="modal-failed-settlements" class="hidden space-y-2">
+                    <h4 class="text-xs font-bold text-red-500 uppercase flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">error</span> 알림톡 발송 실패 — 재전송 필요
+                    </h4>
+                    <div id="modal-failed-settlements-list" class="space-y-2"></div>
+                </div>
                 <div class="space-y-2">
                     <h4 class="text-xs font-bold text-gray-400 uppercase">개별 발주 건별 정산 여부 관리</h4>
                     <div class="overflow-x-auto rounded-xl border border-gray-100 max-h-60 overflow-y-auto">
@@ -1612,24 +1619,17 @@
             const tbody = document.getElementById("analytics-buyers-body");
             tbody.innerHTML = "";
             
-            // 오늘 실시간 데이터 합산 반영
-            const todayRevenue = await BongBongCalculator.getProjectedRevenue();
+            // KPI는 실제 발주 데이터로만 계산 (P1-3: 하드코딩 더미 base 제거)
+            const totalSalesVal = await BongBongCalculator.getProjectedRevenue();
             const orders = await BongBongStore.getOrders();
-            const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
-
-            const baseMonthlySales = 32450000;
-            const baseMonthlyVolume = 1540;
-
-            const totalSalesVal = baseMonthlySales + todayRevenue;
-            const totalVolumeVal = baseMonthlyVolume + todayVolume;
+            const totalVolumeVal = orders.reduce((sum, o) => sum + o.qty, 0);
 
             document.getElementById("kpi-total-sales").textContent = `₩${totalSalesVal.toLocaleString()}`;
             document.getElementById("kpi-total-volume").textContent = `${totalVolumeVal.toLocaleString()} 박스`;
 
-            // 1. 평균 주문 객단가 동적 계산
-            const baseOrderCount = 76;
-            const totalOrderCount = baseOrderCount + orders.length;
-            const avgTicketVal = Math.round(totalSalesVal / totalOrderCount);
+            // 1. 평균 주문 객단가 동적 계산 (0건일 때 0으로 안전 처리)
+            const totalOrderCount = orders.length;
+            const avgTicketVal = totalOrderCount > 0 ? Math.round(totalSalesVal / totalOrderCount) : 0;
             document.getElementById("kpi-avg-ticket").textContent = `₩${avgTicketVal.toLocaleString()}`;
             document.getElementById("kpi-avg-ticket-sub").textContent = `총 ${totalOrderCount}건 주문 기준`;
 
@@ -1830,12 +1830,8 @@
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
 
-        let periodData;
-        if (allData.orders && allData.orders.length > 0) {
-            periodData = aggregateChartData(allData.orders, allData.items, period, currentChartItem);
-        } else {
-            periodData = allData[period];
-        }
+        // 항상 실제 주문 데이터로 집계 (P1-3). 데이터가 없으면 0으로 채워진 실제 빈 상태가 표시된다.
+        const periodData = aggregateChartData(allData.orders || [], allData.items || [], period, currentChartItem);
 
         if (salesChartInstance) salesChartInstance.destroy();
 
@@ -2458,32 +2454,32 @@
 
     window.openSalesDetailModal = async function() {
         try {
-            const data = await BongBongStore.getAnalyticsData();
             const orders = await BongBongStore.getOrders();
-            const todayRevenue = await BongBongCalculator.getProjectedRevenue();
-            const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
-
-            const baseMonthlySales = 32450000;
-            const totalSalesVal = baseMonthlySales + todayRevenue;
+            const items = await BongBongStore.getItems();
+            // 실제 발주 집계만 사용 (P1-3: 하드코딩 더미 base 제거)
+            const totalSalesVal = await BongBongCalculator.getProjectedRevenue();
 
             document.getElementById("modal-sales-total-sales").textContent = `₩${totalSalesVal.toLocaleString()}`;
-            document.getElementById("modal-sales-today-sales").textContent = `+₩${todayRevenue.toLocaleString()}`;
+            document.getElementById("modal-sales-today-sales").textContent = `+₩${totalSalesVal.toLocaleString()}`;
 
             const tbody = document.getElementById("modal-sales-table-body");
             tbody.innerHTML = "";
 
-            const monthlyLen = data.monthly.labels.length;
-            for (let i = monthlyLen - 1; i >= 0; i--) {
-                const isCurrentMonth = data.monthly.labels[i] === "5월";
-                const sales = isCurrentMonth ? totalSalesVal : data.monthly.sales[i];
-                const volume = isCurrentMonth ? (data.monthly.volumes[i] + todayVolume) : data.monthly.volumes[i];
+            const monthly = aggregateChartData(orders, items, 'monthly', 'all');
+            let hasData = false;
+            for (let i = monthly.labels.length - 1; i >= 0; i--) {
+                if (monthly.sales[i] === 0 && monthly.volumes[i] === 0) continue;
+                hasData = true;
                 tbody.insertAdjacentHTML("beforeend", `
-                    <tr class="${isCurrentMonth ? 'bg-blue-50/50 font-bold' : ''}">
-                        <td class="px-4 py-2.5">${data.monthly.labels[i]} 누적</td>
-                        <td class="px-4 py-2.5 text-right font-bold text-primary">₩${sales.toLocaleString()}</td>
-                        <td class="px-4 py-2.5 text-right">${volume.toLocaleString()} 박스</td>
+                    <tr>
+                        <td class="px-4 py-2.5">${monthly.labels[i]} 누적</td>
+                        <td class="px-4 py-2.5 text-right font-bold text-primary">₩${monthly.sales[i].toLocaleString()}</td>
+                        <td class="px-4 py-2.5 text-right">${monthly.volumes[i].toLocaleString()} 박스</td>
                     </tr>
                 `);
+            }
+            if (!hasData) {
+                tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-6 text-center text-gray-400">집계된 매출 데이터가 없습니다.</td></tr>`;
             }
 
             document.getElementById("sales-detail-modal").classList.remove("hidden");
@@ -2496,54 +2492,50 @@
         try {
             const items = await BongBongStore.getItems();
             const orders = await BongBongStore.getOrders();
-            const todayVolume = orders.reduce((sum, o) => sum + o.qty, 0);
-            const baseMonthlyVolume = 1540;
-            const totalVolumeVal = baseMonthlyVolume + todayVolume;
+            // 실제 발주 수량만 집계 (P1-3: 하드코딩 더미 base/비율 제거)
+            const totalVolumeVal = orders.reduce((sum, o) => sum + o.qty, 0);
 
             document.getElementById("modal-volume-total-qty").textContent = `${totalVolumeVal.toLocaleString()} 박스`;
-            document.getElementById("modal-volume-today-qty").textContent = `+${todayVolume.toLocaleString()} 박스`;
+            document.getElementById("modal-volume-today-qty").textContent = `+${totalVolumeVal.toLocaleString()} 박스`;
 
             const tbody = document.getElementById("modal-volume-table-body");
             tbody.innerHTML = "";
 
-            const baseProductVolumes = {
-                "potato": Math.round(baseMonthlyVolume * 0.55),
-                "garlic": Math.round(baseMonthlyVolume * 0.20),
-                "onion": Math.round(baseMonthlyVolume * 0.15),
-                "other": Math.round(baseMonthlyVolume * 0.10)
-            };
-
-            const todayProductVolumes = {};
+            const productVolumes = {};
             orders.forEach(o => {
-                todayProductVolumes[o.itemId] = (todayProductVolumes[o.itemId] || 0) + o.qty;
+                productVolumes[o.itemId] = (productVolumes[o.itemId] || 0) + o.qty;
             });
 
+            let rendered = 0;
             items.forEach(item => {
-                const baseVol = baseProductVolumes[item.id] || 0;
-                const todayVol = todayProductVolumes[item.id] || 0;
-                const totalVol = baseVol + todayVol;
+                const vol = productVolumes[item.id] || 0;
+                if (vol === 0) return;
+                rendered++;
                 tbody.insertAdjacentHTML("beforeend", `
                     <tr>
                         <td class="px-4 py-2.5 font-bold">${item.name}</td>
-                        <td class="px-4 py-2.5 text-right font-semibold text-primary">${totalVol.toLocaleString()} ${item.unit}</td>
+                        <td class="px-4 py-2.5 text-right font-semibold text-primary">${vol.toLocaleString()} ${item.unit}</td>
                     </tr>
                 `);
             });
 
-            const otherBase = baseProductVolumes["other"] || 0;
-            let otherToday = 0;
+            let otherVol = 0;
             orders.forEach(o => {
                 if (!items.find(i => i.id === o.itemId)) {
-                    otherToday += o.qty;
+                    otherVol += o.qty;
                 }
             });
-            if (otherBase + otherToday > 0) {
+            if (otherVol > 0) {
+                rendered++;
                 tbody.insertAdjacentHTML("beforeend", `
                     <tr>
                         <td class="px-4 py-2.5 font-bold text-gray-500">기타 품목</td>
-                        <td class="px-4 py-2.5 text-right font-semibold text-gray-600">${(otherBase + otherToday).toLocaleString()} 박스</td>
+                        <td class="px-4 py-2.5 text-right font-semibold text-gray-600">${otherVol.toLocaleString()} 박스</td>
                     </tr>
                 `);
+            }
+            if (rendered === 0) {
+                tbody.innerHTML = `<tr><td colspan="2" class="px-4 py-6 text-center text-gray-400">집계된 판매량 데이터가 없습니다.</td></tr>`;
             }
 
             document.getElementById("volume-detail-modal").classList.remove("hidden");
@@ -2555,16 +2547,12 @@
     window.openTicketDetailModal = async function() {
         try {
             const data = await BongBongStore.getAnalyticsData();
-            const items = await BongBongStore.getItems();
             const orders = await BongBongStore.getOrders();
-            
-            const baseMonthlySales = 32450000;
-            const todayRevenue = await BongBongCalculator.getProjectedRevenue();
-            const totalSalesVal = baseMonthlySales + todayRevenue;
 
-            const baseOrderCount = 76;
-            const totalOrderCount = baseOrderCount + orders.length;
-            const avgTicketVal = Math.round(totalSalesVal / totalOrderCount);
+            // 실제 발주 집계만 사용 (P1-3: 하드코딩 더미 base 제거, 0건 분모 가드)
+            const totalSalesVal = await BongBongCalculator.getProjectedRevenue();
+            const totalOrderCount = orders.length;
+            const avgTicketVal = totalOrderCount > 0 ? Math.round(totalSalesVal / totalOrderCount) : 0;
 
             document.getElementById("modal-ticket-average").textContent = `₩${avgTicketVal.toLocaleString()}`;
             document.getElementById("modal-ticket-order-count").textContent = `${totalOrderCount}건`;
@@ -2572,27 +2560,24 @@
             const tbody = document.getElementById("modal-ticket-table-body");
             tbody.innerHTML = "";
 
-            const buyerContribution = {};
-            data.buyers.forEach(b => {
-                buyerContribution[b.name] = b.revenue;
-            });
+            // 거래처별 기여 매출은 getAnalyticsBuyers가 이미 주문 기반으로 집계함(이중 합산 방지)
+            const sortedBuyers = data.buyers
+                .map(b => [b.name, b.revenue])
+                .filter(([, rev]) => rev > 0)
+                .sort((a, b) => b[1] - a[1]);
 
-            orders.forEach(o => {
-                const item = items.find(i => i.id === o.itemId);
-                const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
-                buyerContribution[o.buyerName] = (buyerContribution[o.buyerName] || 0) + (o.qty * price);
-            });
-
-            const sortedBuyers = Object.entries(buyerContribution).sort((a, b) => b[1] - a[1]);
-
-            sortedBuyers.forEach(([name, rev]) => {
-                tbody.insertAdjacentHTML("beforeend", `
-                    <tr>
-                        <td class="px-4 py-2.5 font-bold">${name}</td>
-                        <td class="px-4 py-2.5 text-right font-bold text-primary">₩${rev.toLocaleString()}</td>
-                    </tr>
-                `);
-            });
+            if (sortedBuyers.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="2" class="px-4 py-6 text-center text-gray-400">집계된 거래처 매출이 없습니다.</td></tr>`;
+            } else {
+                sortedBuyers.forEach(([name, rev]) => {
+                    tbody.insertAdjacentHTML("beforeend", `
+                        <tr>
+                            <td class="px-4 py-2.5 font-bold">${name}</td>
+                            <td class="px-4 py-2.5 text-right font-bold text-primary">₩${rev.toLocaleString()}</td>
+                        </tr>
+                    `);
+                });
+            }
 
             document.getElementById("ticket-detail-modal").classList.remove("hidden");
         } catch (err) {
@@ -2804,9 +2789,64 @@
                 }
             }
             
+            await renderFailedSettlements(buyerName);
+
             document.getElementById("buyer-settlements-modal").classList.remove("hidden");
         } catch (err) {
             console.error("Failed to open settlements modal:", err);
+        }
+    };
+
+    // (P1-1) 해당 거래처의 알림톡 발송 실패 정산 건을 모달 상단에 렌더링
+    async function renderFailedSettlements(buyerName) {
+        const wrapper = document.getElementById("modal-failed-settlements");
+        const list = document.getElementById("modal-failed-settlements-list");
+        if (!wrapper || !list) return;
+
+        try {
+            const failed = (await BongBongStore.getFailedSettlements())
+                .filter(s => s.buyerName === buyerName);
+
+            if (failed.length === 0) {
+                wrapper.classList.add("hidden");
+                list.innerHTML = "";
+                return;
+            }
+
+            wrapper.classList.remove("hidden");
+            list.innerHTML = failed.map(s => `
+                <div class="flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                    <div class="min-w-0">
+                        <div class="text-xs font-bold text-red-700">${s.settledDate} · ₩${s.totalAmount.toLocaleString()}</div>
+                        <div class="text-[11px] text-red-500 truncate">사유: ${s.errorMessage || '알 수 없는 오류'}</div>
+                    </div>
+                    <button type="button" onclick="handleResendAlimtalk('${s.id}', '${buyerName.replace(/'/g, "\\'")}', this)"
+                        class="shrink-0 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">send</span> 재전송
+                    </button>
+                </div>
+            `).join("");
+        } catch (err) {
+            console.error("Failed to render failed settlements:", err);
+            wrapper.classList.add("hidden");
+        }
+    }
+
+    // (P1-1) 단일 정산 건 알림톡 재전송 핸들러
+    window.handleResendAlimtalk = async function(settlementId, buyerName, btn) {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<span class="material-symbols-outlined text-sm animate-spin">sync</span> 전송 중`;
+        }
+        try {
+            await BongBongStore.resendAlimtalk(settlementId);
+            alert("✅ 알림톡 재전송에 성공했습니다.");
+            await openBuyerSettlementsModal(buyerName);
+            await renderAnalyticsBoard();
+        } catch (err) {
+            console.error("Resend failed:", err);
+            alert("⚠️ 재전송에 실패했습니다: " + (err.message || "알 수 없는 오류"));
+            await openBuyerSettlementsModal(buyerName);
         }
     };
 
