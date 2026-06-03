@@ -156,6 +156,8 @@
                            class="w-full rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark text-sm py-3 px-4">
                 </div>
 
+                <p id="step2-error" role="alert" class="hidden text-xs text-red-600 font-semibold leading-relaxed bg-red-50 border border-red-100 rounded-lg p-3"></p>
+
                 <div class="flex gap-3 pt-4">
                     <button type="button" onclick="goToStep(1)" class="w-1/3 border border-gray-200 text-gray-700 font-bold py-4 rounded-xl hover:bg-gray-50 active:scale-98 transition-all text-sm">
                         이전으로
@@ -633,6 +635,11 @@
         const buyerName = document.getElementById("buyer-name").value.trim();
         const buyerContact = document.getElementById("buyer-contact").value.trim();
 
+        // 검증 상태 초기화 (인라인 에러 + 필드 강조)
+        const errEl = document.getElementById("step2-error");
+        ["buyer-name", "buyer-contact"].forEach(id => document.getElementById(id)?.classList.remove("border-red-400"));
+        if (errEl) { errEl.classList.add("hidden"); errEl.innerHTML = ""; }
+
         if (window.z && OrderSchema) {
             try {
                 OrderSchema.parse({
@@ -642,11 +649,22 @@
                     qty: 1
                 });
             } catch (err) {
-                if (err.errors) {
-                    const errorMsg = err.errors.map(e => `• ${e.message}`).join("\n");
-                    alert(`입력 값이 올바르지 않습니다.\n\n${errorMsg}`);
-                } else {
-                    alert(`오류가 발생했습니다: ${err.message}`);
+                const msgs = err.errors
+                    ? err.errors.map(e => `• ${e.message}`)
+                    : [`• 오류가 발생했습니다: ${err.message}`];
+                if (errEl) {
+                    errEl.innerHTML = msgs.join("<br>");
+                    errEl.classList.remove("hidden");
+                }
+                // 첫 번째 오류 필드로 포커스 이동 + 강조
+                const firstPath = err.errors && err.errors[0] && err.errors[0].path && err.errors[0].path[0];
+                const fieldId = firstPath === "buyerContact" ? "buyer-contact"
+                              : firstPath === "buyerName" ? "buyer-name" : null;
+                const field = fieldId && document.getElementById(fieldId);
+                if (field) {
+                    field.classList.add("border-red-400");
+                    field.focus();
+                    field.scrollIntoView({ block: "center", behavior: "smooth" });
                 }
                 return;
             }
@@ -695,7 +713,7 @@
         const submitBtn = document.getElementById("submit-btn");
 
         if (selectedItems.size === 0) {
-            alert("선택된 발주 품목이 없습니다.");
+            window.BongBongUI && window.BongBongUI.toast("선택된 발주 품목이 없습니다.", 'info');
             goToStep(1);
             return;
         }

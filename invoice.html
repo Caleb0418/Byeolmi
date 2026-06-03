@@ -255,9 +255,10 @@
         const biz = (invoiceSettings && invoiceSettings.business_name) || BongBongStore.DEFAULT_SETTINGS.business_name;
         const textToCopy = `${acct.bankAccount.replace(/-/g, '')} ${acct.holder}`.trim();
         navigator.clipboard.writeText(textToCopy).then(() => {
-            alert(`${biz} 결제계좌 정보가 클립보드에 복사되었습니다.\n\n* 복사된 내용: ${textToCopy}`);
+            window.BongBongUI && window.BongBongUI.toast(`${biz} 결제계좌가 복사되었습니다: ${textToCopy}`, 'success');
         }).catch(err => {
             console.error("복사 실패: ", err);
+            window.BongBongUI && window.BongBongUI.toast("계좌 복사에 실패했습니다. 직접 입력해 주세요.", 'error');
         });
     }
 </script>
