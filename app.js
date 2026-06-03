@@ -14,6 +14,12 @@ if (window.supabase && typeof window.supabase.createClient === 'function') {
 var supabase = window.supabase;
 
 // 0-1. Zod 스키마 정의 (외부 입력 검증용)
+// zod UMD 번들은 전역을 `Zod`로 노출한다. 기존 코드는 `window.z`를 참조하므로
+// 별칭을 잡아 준다. (이 누락으로 입력 검증이 조용히 비활성화돼 있었음 — silent failure 방지)
+if (typeof window !== 'undefined' && !window.z && window.Zod) {
+    window.z = window.Zod;
+}
+
 let ItemSchema;
 let OrderSchema;
 
