@@ -60,7 +60,7 @@
 <div class="mesh-gradient"></div>
 
 <!-- Sidebar Menu -->
-<aside class="flex flex-col h-screen w-64 border-r border-gray-200 bg-white/60 backdrop-blur-md sticky top-0 shrink-0 z-20">
+<aside id="sidebar-menu" class="fixed inset-y-0 left-0 z-40 flex flex-col h-screen w-64 border-r border-gray-200 bg-white/95 backdrop-blur-md lg:bg-white/60 transition-transform duration-300 transform -translate-x-full lg:translate-x-0 lg:sticky lg:top-0 lg:shrink-0 lg:z-20">
     <div class="px-6 py-8 flex flex-col gap-1">
         <h1 class="text-xl font-bold text-primary">별미집 관리자</h1>
         <p class="text-xs text-gray-500 font-semibold uppercase tracking-wider">도매 발주 및 정산 파이프라인</p>
@@ -98,35 +98,46 @@
     </div>
 </aside>
 
+<!-- Sidebar Overlay -->
+<div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden" onclick="toggleSidebar(false)"></div>
+
 <!-- Main Area -->
 <main class="flex-1 flex flex-col min-w-0 bg-transparent overflow-y-auto">
     <!-- Top Nav Controls -->
-    <header class="flex justify-between items-center w-full px-10 h-24 bg-white/40 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-30">
-        <div>
-            <h2 class="text-2xl font-extrabold text-primary">별미집 일일 정산판</h2>
-            <p class="text-sm text-gray-500" id="current-date">로딩 중...</p>
-        </div>
-        <div class="flex gap-4">
-            <button id="approve-orders-btn" class="flex items-center gap-2 px-6 h-12 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-md transition-all">
-                <span class="material-symbols-outlined">assignment_turned_in</span>
-                지금까지 들어온 발주 승인하기
+    <header class="flex justify-between items-center w-full px-4 md:px-10 h-16 md:h-24 bg-white/40 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-30">
+        <div class="flex items-center gap-3">
+            <!-- Hamburger button for mobile -->
+            <button onclick="toggleSidebar(true)" class="lg:hidden flex items-center justify-center p-2 rounded-xl text-primary hover:bg-gray-100/50 transition-all" aria-label="메뉴 열기">
+                <span class="material-symbols-outlined text-2xl">menu</span>
             </button>
-            <button id="send-settle-btn" class="flex items-center gap-2 px-6 h-12 rounded-xl bg-secondary text-white font-bold text-sm hover:bg-opacity-90 shadow-md">
-                <span class="material-symbols-outlined">send</span>
-                정산 알림톡 일괄 발송
+            <div>
+                <h2 class="text-base md:text-2xl font-extrabold text-primary leading-tight">별미집 일일 정산판</h2>
+                <p class="text-[10px] md:text-sm text-gray-500" id="current-date">로딩 중...</p>
+            </div>
+        </div>
+        <div class="flex gap-2 md:gap-4">
+            <button id="approve-orders-btn" class="flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 h-10 md:h-12 rounded-xl bg-indigo-600 text-white font-bold text-xs md:text-sm hover:bg-indigo-700 shadow-md transition-all">
+                <span class="material-symbols-outlined text-sm md:text-base">assignment_turned_in</span>
+                <span class="hidden sm:inline">지금까지 들어온 발주 승인하기</span>
+                <span class="sm:hidden">발주 승인</span>
+            </button>
+            <button id="send-settle-btn" class="flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 h-10 md:h-12 rounded-xl bg-secondary text-white font-bold text-xs md:text-sm hover:bg-opacity-90 shadow-md">
+                <span class="material-symbols-outlined text-sm md:text-base">send</span>
+                <span class="hidden sm:inline">정산 알림톡 일괄 발송</span>
+                <span class="sm:hidden">알림톡 발송</span>
             </button>
         </div>
     </header>
 
     <!-- Main Container -->
-    <div class="p-10 space-y-8 max-w-[1280px] mx-auto w-full">
+    <div class="p-4 md:p-10 space-y-6 md:space-y-8 max-w-[1280px] mx-auto w-full">
 
         <!-- Tab 3: Products Configuration View -->
         <div id="products-tab" class="hidden space-y-8">
             <!-- Glass Panel Layout (Split Screen) -->
-            <div class="glass-panel rounded-2xl overflow-hidden shadow-md flex min-h-[600px] bg-white/60">
+            <div class="glass-panel rounded-2xl overflow-hidden shadow-md flex flex-col md:flex-row min-h-[600px] bg-white/60">
                 <!-- Left: Product List -->
-                <div class="w-2/5 border-r border-gray-200/80 p-8 overflow-y-auto space-y-4 bg-white/30">
+                <div class="w-full md:w-2/5 border-b md:border-b-0 md:border-r border-gray-200/80 p-4 md:p-8 overflow-y-auto space-y-4 bg-white/30">
                     <div class="flex justify-between items-center mb-2">
                         <span class="text-xs font-extrabold text-gray-400 uppercase">등록된 품목</span>
                         <button onclick="initNewProductForm()" class="bg-primary text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-0.5 hover:bg-opacity-90">
@@ -139,7 +150,7 @@
                 </div>
 
                 <!-- Right: Product Editor Form -->
-                <div class="flex-1 p-8 overflow-y-auto">
+                <div class="flex-1 p-4 md:p-8 overflow-y-auto">
                     <h3 class="text-md font-bold text-primary mb-6 pb-2 border-b border-gray-100 flex items-center gap-1.5">
                         <span class="material-symbols-outlined">edit_note</span>
                         품목 정보 등록 및 수정
@@ -763,6 +774,22 @@
 <script>
     let isBulkEditing = false;
 
+    // 모바일 사이드바 토글 기능
+    function toggleSidebar(open) {
+        const sidebar = document.getElementById("sidebar-menu");
+        const overlay = document.getElementById("sidebar-overlay");
+        if (sidebar && overlay) {
+            if (open) {
+                sidebar.classList.remove("-translate-x-full");
+                overlay.classList.remove("hidden");
+            } else {
+                sidebar.classList.add("-translate-x-full");
+                overlay.classList.add("hidden");
+            }
+        }
+    }
+    window.toggleSidebar = toggleSidebar;
+
     document.addEventListener("DOMContentLoaded", async () => {
         // Elements
         const orderTableBody = document.getElementById("order-table-body");
@@ -1342,6 +1369,9 @@
     let shareChartInstance = null;
 
     async function switchTab(tabId) {
+        // 탭 전환 시 모바일 사이드바 닫기
+        toggleSidebar(false);
+
         const dashboardTab = document.getElementById("dashboard-tab");
         const analyticsTab = document.getElementById("analytics-tab");
         const productsTab = document.getElementById("products-tab");
