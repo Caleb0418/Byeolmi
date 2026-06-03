@@ -775,7 +775,7 @@
                 if (!user) {
                     // 로그인되지 않은 경우 카카오 로그인 요청
                     if (confirm("로그인이 필요한 서비스입니다. 카카오 로그인 페이지로 이동하시겠습니까?")) {
-                        await BongBongAuth.signInWithKakao();
+                        await BongBongAuth.signInWithKakao('/index.html');
                     }
                     return;
                 }
@@ -786,7 +786,7 @@
                                     "• 도매 구매자이시라면 [취소]를 눌러 발주 페이지로 이동합니다.";
                     if (confirm(message)) {
                         await BongBongAuth.signOut();
-                        await BongBongAuth.signInWithKakao();
+                        await BongBongAuth.signInWithKakao('/index.html');
                     } else {
                         window.location.href = "client.html";
                     }
