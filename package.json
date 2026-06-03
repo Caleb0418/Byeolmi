@@ -1,0 +1,9 @@
+{
+  "name": "byeolmijip",
+  "version": "1.0.0",
+  "description": "별미집 - 도매 발주 및 정산 시스템",
+  "private": true,
+  "scripts": {
+    "test": "node tests/calculator.test.js && node tests/crypt.test.js"
+  }
+}

@@ -73,30 +73,14 @@ const CATEGORIES = [
     { id: "living", name: "생활용품" }
 ];
 
-// 과거 정산 분석용 데이터
+// 분석 기본 빈 구조 (실데이터가 없거나 조회 실패 시 폴백)
+// 주의(P1-3): 기존의 하드코딩 더미 매출/거래처 값은 실제처럼 오인될 수 있어 제거했다.
+// 실제 추이/거래처 통계는 aggregateChartData(orders) 및 getAnalyticsBuyers()가 동적으로 계산한다.
 const ANALYTICS_DATA = {
-    monthly: {
-        labels: ["12월", "1월", "2월", "3월", "4월", "5월"],
-        sales: [18400000, 22100000, 19500000, 25600000, 28900000, 32450000],
-        volumes: [980, 1120, 950, 1280, 1380, 1540]
-    },
-    weekly: {
-        labels: ["1주차", "2주차", "3주차", "4주차", "5주차"],
-        sales: [5800000, 6200000, 7100000, 6800000, 6550000],
-        volumes: [280, 310, 340, 320, 315]
-    },
-    daily: {
-        labels: ["22일", "23일", "24일", "25일", "26일", "27일", "28일"],
-        sales: [980000, 1200000, 850000, 1450000, 1100000, 1320000, 1240000],
-        volumes: [48, 60, 42, 72, 55, 66, 62]
-    },
-    buyers: [
-        { name: "박민지 (맘공구)", mainItem: "골드 감자", qty: 340, revenue: 6120000, status: "정상" },
-        { name: "최유진 (마트)", mainItem: "깐마늘 XL", qty: 180, revenue: 4200000, status: "미수금 ₩120,000" },
-        { name: "이정재 (대형유통)", mainItem: "골드 감자", qty: 250, revenue: 3750000, status: "정상" },
-        { name: "김선호 (야채상)", mainItem: "빨간 양파", qty: 140, revenue: 1680000, status: "정상" },
-        { name: "정해인 (식자재)", mainItem: "골드 감자", qty: 95, revenue: 1425000, status: "정상" }
-    ]
+    monthly: { labels: [], sales: [], volumes: [] },
+    weekly:  { labels: [], sales: [], volumes: [] },
+    daily:   { labels: [], sales: [], volumes: [] },
+    buyers: []
 };
 
 // LocalStorage 및 Supabase 통합 입출력 제어 클래스
@@ -603,6 +587,10 @@ class BongBongStore {
             };
         } catch (err) {
             console.error("Failed to fetch analytics data:", err);
+            // (P2-2) 조용한 폴백을 사용자에게 알림 (브라우저에서만 동작)
+            if (typeof window !== 'undefined' && window.BongBongUI) {
+                window.BongBongUI.toast("분석 데이터 일부를 불러오지 못했습니다.");
+            }
             return {
                 ...ANALYTICS_DATA,
                 buyers,
@@ -653,6 +641,11 @@ class BongBongStore {
             .from('approved_owners')
             .delete()
             .eq('email', email);
+        // (P2-2) 조용한 실패 제거: 오류를 로깅하고 호출부로 전파한다.
+        if (error) {
+            console.error("Failed to delete approved owner:", error);
+            throw new Error(error.message);
+        }
     }
     static async sendAlimtalk(buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl) {
         if (!supabase) throw new Error("Database not connected");
@@ -664,6 +657,91 @@ class BongBongStore {
             throw error;
         }
         return data;
+    }
+
+    // (P1-2) 발주 접수 확인 알림톡 발송 (구매자 대상).
+    // 호출부(client.html)에서 fail-safe 로 처리하여 발송 실패가 발주 성공을 막지 않도록 한다.
+    static async sendOrderConfirmation(buyerName, contact, itemsDetailSummary) {
+        if (!supabase) throw new Error("Database not connected");
+        const { data, error } = await supabase.functions.invoke('send-alimtalk', {
+            body: { type: 'order_confirm', buyerName, contact, itemsDetailSummary }
+        });
+        if (error) {
+            console.error("Failed to invoke order confirmation alimtalk:", error);
+            throw error;
+        }
+        return data;
+    }
+
+    // (P1-1) 알림톡 발송에 실패한 정산 내역 조회 (거래처 정보 포함)
+    static async getFailedSettlements() {
+        if (!supabase) return [];
+        const { data, error } = await supabase
+            .from('settlements')
+            .select('*, buyers(name, contact)')
+            .eq('send_status', 'failed')
+            .order('created_at', { ascending: false });
+        if (error) {
+            console.error("Failed to fetch failed settlements:", error);
+            throw new Error(error.message);
+        }
+        return data.map(s => ({
+            id: s.id,
+            buyerName: s.buyers ? s.buyers.name : '(알 수 없는 거래처)',
+            settledDate: s.settled_date,
+            totalAmount: s.total_amount,
+            errorMessage: s.error_message
+        }));
+    }
+
+    // (P1-1) 단일 정산 건 알림톡 재전송. 명세서 요약을 재구성해 Edge Function 재호출 후 상태 갱신.
+    static async resendAlimtalk(settlementId) {
+        if (!supabase) throw new Error("Database not connected");
+
+        // 1. 정산 + 거래처 정보 로드
+        const { data: s, error } = await supabase
+            .from('settlements')
+            .select('*, buyers(name, contact)')
+            .eq('id', settlementId)
+            .maybeSingle();
+        if (error) throw new Error(error.message);
+        if (!s) throw new Error("정산 내역을 찾을 수 없습니다.");
+
+        const buyerName = s.buyers ? s.buyers.name : '';
+        const contact = s.buyers && s.buyers.contact
+            ? BongBongCrypt.decrypt(s.buyers.contact)
+            : '010-0000-0000';
+
+        // 2. 명세서 요약 재구성 (settlement.detail: [{ itemId, qty, price }])
+        const items = await this.getItems();
+        let itemsDetailSummary = "";
+        (s.detail || []).forEach(d => {
+            const item = items.find(i => i.id === d.itemId);
+            const name = item ? item.name : d.itemId;
+            const unit = item ? item.unit : '';
+            const subtotal = (d.qty || 0) * (d.price || 0);
+            itemsDetailSummary += `- ${name} (${d.qty}${unit}): ₩${subtotal.toLocaleString()}\n`;
+        });
+        const invoiceUrl = window.location.origin + `/invoice.html?buyer=${encodeURIComponent(buyerName)}`;
+
+        // 3. 재발송 시도 후 결과를 정산 상태에 반영
+        try {
+            await this.sendAlimtalk(buyerName, contact, s.total_amount, itemsDetailSummary, invoiceUrl);
+            const { error: upErr } = await supabase
+                .from('settlements')
+                .update({ send_status: 'sent', sent_at: new Date().toISOString(), error_message: null })
+                .eq('id', settlementId);
+            if (upErr) throw new Error(upErr.message);
+            this.dispatchStorageChange();
+            return { success: true };
+        } catch (sendErr) {
+            await supabase
+                .from('settlements')
+                .update({ send_status: 'failed', error_message: sendErr.message })
+                .eq('id', settlementId);
+            this.dispatchStorageChange();
+            throw sendErr;
+        }
     }
 
     static async saveSettlement(settlement) {
@@ -940,25 +1018,27 @@ class BongBongAuth {
 
 window.BongBongAuth = BongBongAuth;
 
-const CRYPTO_SECRET = "bongbong-secret-key-1234567890";
-
+// 연락처 보호 정책 (P0-2)
+// - 기존에는 CryptoJS.AES 로 클라이언트에서 암호화했으나, 키(CRYPTO_SECRET)가 소스에 노출되어
+//   누구나 복호화 가능 → 실질적 보안 효과가 없었으므로 제거했다.
+// - 실제 보안 경계는 buyers 테이블의 RLS(소유자 또는 본인만 select/update 가능)가 담당한다.
+//   따라서 연락처는 평문으로 저장하고, 화면 노출 시에는 maskContact() 로 마스킹한다.
+// - encrypt/decrypt 는 호출부 호환을 위해 패스스루로 유지한다. (실제 변환 없음)
 class BongBongCrypt {
+    // 평문 저장 (RLS 로 보호). 호출부 호환용 패스스루.
     static encrypt(text) {
-        if (!text) return "";
-        if (typeof CryptoJS === 'undefined') return text;
-        return CryptoJS.AES.encrypt(text, CRYPTO_SECRET).toString();
+        return text || "";
     }
 
-    static decrypt(cipher) {
-        if (!cipher) return "";
-        if (typeof CryptoJS === 'undefined') return cipher;
-        try {
-            const bytes = CryptoJS.AES.decrypt(cipher, CRYPTO_SECRET);
-            return bytes.toString(CryptoJS.enc.Utf8);
-        } catch (e) {
-            console.error("Decryption failed:", e);
-            return cipher;
+    // 평문은 그대로 반환. 레거시 AES 암호문('Salted__' base64 → 'U2FsdGVk' 접두)은
+    // 키가 더 이상 존재하지 않아 복호화 불가하므로 빈 값으로 처리(재입력 유도).
+    static decrypt(value) {
+        if (!value) return "";
+        if (typeof value === 'string' && value.startsWith('U2FsdGVk')) {
+            console.warn("레거시 암호화 연락처는 복호화할 수 없습니다. 재입력이 필요합니다.");
+            return "";
         }
+        return value;
     }
 
     static maskContact(contact) {
@@ -968,3 +1048,48 @@ class BongBongCrypt {
 }
 
 window.BongBongCrypt = BongBongCrypt;
+
+// (P2-2) 공용 사용자 알림(toast) 유틸 — 조용한 실패를 사용자에게 노출하기 위함.
+// 브라우저에서만 동작하고, document 가 없으면(테스트 등) 안전하게 no-op 한다.
+const BongBongUI = {
+    toast(message, type = 'error') {
+        try {
+            if (typeof document === 'undefined' || !document.body) return;
+            let container = document.getElementById('bb-toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'bb-toast-container';
+                container.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
+                document.body.appendChild(container);
+            }
+            const colors = { error: '#dc2626', success: '#16a34a', info: '#334155' };
+            const el = document.createElement('div');
+            el.setAttribute('role', 'status');
+            el.setAttribute('aria-live', 'polite');
+            el.style.cssText = `pointer-events:auto;max-width:90vw;padding:10px 16px;border-radius:12px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.18);background:${colors[type] || colors.info};opacity:0;transition:opacity .2s ease;`;
+            el.textContent = message;
+            container.appendChild(el);
+            requestAnimationFrame(() => { el.style.opacity = '1'; });
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 250);
+            }, 3500);
+        } catch (e) {
+            // 토스트 표시 실패가 앱 흐름을 막지 않도록 무시
+        }
+    }
+};
+window.BongBongUI = BongBongUI;
+
+// Node.js 테스트 환경을 위한 CommonJS export (브라우저에서는 module 이 없어 무시됨)
+// 테스트가 복붙 사본이 아닌 실제 프로덕션 로직을 검증하도록 한다 (드리프트 방지).
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        BongBongCalculator,
+        BongBongStore,
+        BongBongAuth,
+        BongBongCrypt,
+        BongBongUI,
+        CATEGORIES
+    };
+}

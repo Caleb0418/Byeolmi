@@ -29,6 +29,20 @@
         }
     </script>
     <style>
+        /* (P2-4) 접근성: 키보드 포커스 가시성 + 모션 민감 사용자 배려 */
+        :focus-visible {
+            outline: 3px solid #2563eb;
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.001ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
         body {
             background-color: #f3f4f6;
         }
@@ -469,6 +483,7 @@
             });
         } catch (err) {
             console.error("Failed to render page:", err);
+            window.BongBongUI && window.BongBongUI.toast("페이지를 불러오지 못했습니다. 새로고침 해주세요.");
         }
     }
 
@@ -684,6 +699,11 @@
 
             const itemsSummaryTxt = summaryDetails.join(", ");
             const totalQty = Array.from(selectedItems.values()).reduce((sum, q) => sum + q, 0);
+
+            // (P1-2) 구매자에게 발주 접수 확인 알림톡 발송 (fail-safe: 실패해도 발주는 성공 처리)
+            const orderConfirmSummary = summaryDetails.map(d => `- ${d}`).join("\n");
+            BongBongStore.sendOrderConfirmation(buyerName, buyerContact, orderConfirmSummary)
+                .catch(err => console.warn("발주 확인 알림톡 발송 실패(발주는 정상 접수됨):", err));
 
             openOrderSuccessDrawer(buyerName, itemsSummaryTxt, totalQty);
 
