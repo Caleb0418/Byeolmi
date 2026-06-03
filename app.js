@@ -617,7 +617,10 @@ class BongBongAuth {
             provider: 'kakao',
             options: {
                 redirectTo: window.location.origin + '/client.html',
-                scopes: 'profile_nickname profile_image'
+                scopes: 'profile_nickname profile_image',
+                queryParams: {
+                    scope: 'profile_nickname profile_image'
+                }
             }
         });
         if (error) {
