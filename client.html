@@ -209,22 +209,7 @@
         </div>
     </div>
 
-    <!-- Kakao Login Overlay Modal -->
-    <div id="kakao-login-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-6 text-center border border-gray-100">
-            <div class="space-y-2">
-                <div class="w-16 h-16 rounded-full bg-[#fee500] text-[#3c1e1e] flex items-center justify-center mx-auto shadow-sm">
-                    <span class="material-symbols-outlined text-3xl font-bold">chat_bubble</span>
-                </div>
-                <h3 class="font-serif text-lg font-bold text-gray-900">별미집 B2B 파트너 로그인</h3>
-                <p class="text-xs text-gray-500">본 발주 시스템은 사전 승인된 도매 파트너 전용 공간입니다. 카카오 계정으로 로그인 후 이용해 주세요.</p>
-            </div>
-            <button onclick="handleKakaoLogin()" class="w-full bg-[#fee500] hover:bg-[#ebd200] text-[#3c1e1e] font-extrabold py-4 rounded-xl shadow-sm text-sm active:scale-98 transition-all flex items-center justify-center gap-2">
-                <span class="material-symbols-outlined text-lg">chat_bubble</span>
-                카카오계정으로 로그인
-            </button>
-        </div>
-    </div>
+    <!-- Kakao Login Overlay Modal (제거됨 - 비로그인 즉시 발주 지원) -->
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -239,16 +224,12 @@
         const qtyInput = document.getElementById("qty-input");
         const orderForm = document.getElementById("order-form");
 
-        // 0. Buyer 권한 및 프로필 자동 로드
+        // 0. Buyer 권한 및 프로필 자동 로드 (비로그인 발주는 입력 허용)
         async function checkClientAuth() {
             if (!supabase) return;
-            const loginModal = document.getElementById("kakao-login-modal");
             try {
                 const user = await BongBongAuth.getCurrentUser();
-                if (!user) {
-                    loginModal.classList.remove("hidden");
-                } else {
-                    loginModal.classList.add("hidden");
+                if (user) {
                     const { data, error } = await supabase
                         .from('buyers')
                         .select('name')

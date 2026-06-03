@@ -307,9 +307,11 @@ class BongBongStore {
 
         if (!supabase) throw new Error("Database not connected");
 
-        // RLS 정책 통과를 위해 현재 로그인된 유저의 buyer_id 조회
+        // RLS 및 데이터 관계 매핑을 위한 buyer_id 조회 또는 생성
         let buyerId = null;
         const { data: { user } } = await supabase.auth.getUser();
+        
+        // 1. 로그인된 상태라면 auth_uid 기반으로 우선 조회
         if (user) {
             const { data: buyerData } = await supabase
                 .from('buyers')
@@ -318,6 +320,28 @@ class BongBongStore {
                 .maybeSingle();
             if (buyerData) {
                 buyerId = buyerData.id;
+            }
+        }
+        
+        // 2. 비로그인이거나 매핑 정보가 없으면 이름(buyerName) 기반 조회
+        if (!buyerId) {
+            const { data: buyerByName } = await supabase
+                .from('buyers')
+                .select('id')
+                .eq('name', buyerName)
+                .maybeSingle();
+            if (buyerByName) {
+                buyerId = buyerByName.id;
+            } else {
+                // 3. 존재하지 않는 이름일 경우 새로운 거래처 정보 자동 생성
+                const { data: newBuyer } = await supabase
+                    .from('buyers')
+                    .insert({ name: buyerName })
+                    .select('id')
+                    .maybeSingle();
+                if (newBuyer) {
+                    buyerId = newBuyer.id;
+                }
             }
         }
 
