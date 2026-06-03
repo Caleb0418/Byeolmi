@@ -491,31 +491,65 @@ class BongBongStore {
 
             const orders = await this.getOrders();
             const items = await this.getItems();
+            
+            const { data: dbSettlements, error: settlementsError } = await supabase
+                .from('settlements')
+                .select('*');
+            if (settlementsError) throw settlementsError;
 
-            const buyerStats = {};
+            const todayStats = {};
             orders.forEach(order => {
                 const item = items.find(i => i.id === order.itemId);
                 const price = BongBongCalculator.getWholesaleUnitPrice(item, order.qty);
                 const subtotal = order.qty * price;
 
-                if (!buyerStats[order.buyerName]) {
-                    buyerStats[order.buyerName] = {
+                if (!todayStats[order.buyerName]) {
+                    todayStats[order.buyerName] = {
                         qty: 0,
                         revenue: 0,
                         items: {}
                     };
                 }
-                buyerStats[order.buyerName].qty += order.qty;
-                buyerStats[order.buyerName].revenue += subtotal;
-                buyerStats[order.buyerName].items[order.itemId] = (buyerStats[order.buyerName].items[order.itemId] || 0) + order.qty;
+                todayStats[order.buyerName].qty += order.qty;
+                todayStats[order.buyerName].revenue += subtotal;
+                todayStats[order.buyerName].items[order.itemId] = (todayStats[order.buyerName].items[order.itemId] || 0) + order.qty;
+            });
+
+            const pastStats = {};
+            dbSettlements.forEach(settlement => {
+                const buyerObj = dbBuyers.find(b => b.id === settlement.buyer_id);
+                const buyerName = buyerObj ? buyerObj.name : "알 수 없음";
+
+                if (!pastStats[buyerName]) {
+                    pastStats[buyerName] = {
+                        qty: 0,
+                        revenue: 0,
+                        unpaidTotal: 0
+                    };
+                }
+
+                pastStats[buyerName].revenue += settlement.total_amount;
+                if (settlement.payment_status === '미수금') {
+                    pastStats[buyerName].unpaidTotal += settlement.total_amount;
+                }
+
+                if (settlement.detail && Array.isArray(settlement.detail)) {
+                    settlement.detail.forEach(d => {
+                        pastStats[buyerName].qty += (d.qty || 0);
+                    });
+                }
             });
 
             const resultBuyers = dbBuyers.map(buyer => {
-                const stats = buyerStats[buyer.name] || { qty: 0, revenue: 0, items: {} };
-                
+                const today = todayStats[buyer.name] || { qty: 0, revenue: 0, items: {} };
+                const past = pastStats[buyer.name] || { qty: 0, revenue: 0, unpaidTotal: 0 };
+
+                const totalRevenue = past.revenue + today.revenue;
+                const totalQty = past.qty + today.qty;
+
                 let mainItem = "없음";
                 let maxQty = 0;
-                Object.entries(stats.items).forEach(([itemId, q]) => {
+                Object.entries(today.items).forEach(([itemId, q]) => {
                     if (q > maxQty) {
                         maxQty = q;
                         const item = items.find(i => i.id === itemId);
@@ -523,33 +557,53 @@ class BongBongStore {
                     }
                 });
 
+                if (mainItem === "없음" && past.revenue > 0) {
+                    mainItem = "기존 정산 완료 품목";
+                }
+
+                let statusText = "정상";
+                if (past.unpaidTotal > 0) {
+                    statusText = `미수금 ₩${past.unpaidTotal.toLocaleString()}`;
+                }
+
                 return {
                     name: buyer.name,
                     mainItem: mainItem,
-                    qty: stats.qty,
-                    revenue: stats.revenue,
-                    status: buyer.status || "정상"
+                    qty: totalQty,
+                    revenue: totalRevenue,
+                    status: statusText
                 };
             });
 
-            Object.keys(buyerStats).forEach(name => {
+            Object.keys(todayStats).forEach(name => {
                 if (!resultBuyers.some(b => b.name === name)) {
-                    const stats = buyerStats[name];
+                    const today = todayStats[name];
+                    const past = pastStats[name] || { qty: 0, revenue: 0, unpaidTotal: 0 };
+
+                    const totalRevenue = past.revenue + today.revenue;
+                    const totalQty = past.qty + today.qty;
+
                     let mainItem = "없음";
                     let maxQty = 0;
-                    Object.entries(stats.items).forEach(([itemId, q]) => {
+                    Object.entries(today.items).forEach(([itemId, q]) => {
                         if (q > maxQty) {
                             maxQty = q;
                             const item = items.find(i => i.id === itemId);
                             mainItem = item ? item.name : itemId;
                         }
                     });
+
+                    let statusText = "정상";
+                    if (past.unpaidTotal > 0) {
+                        statusText = `미수금 ₩${past.unpaidTotal.toLocaleString()}`;
+                    }
+
                     resultBuyers.push({
                         name: name,
                         mainItem: mainItem,
-                        qty: stats.qty,
-                        revenue: stats.revenue,
-                        status: "정상"
+                        qty: totalQty,
+                        revenue: totalRevenue,
+                        status: statusText
                     });
                 }
             });
@@ -564,11 +618,21 @@ class BongBongStore {
     static async updateBuyerStatus(buyerName, newStatus) {
         if (!supabase) return;
         try {
-            const { error } = await supabase
+            const { data: buyerData, error: buyerError } = await supabase
                 .from('buyers')
-                .update({ status: newStatus })
-                .eq('name', buyerName);
-            if (error) throw error;
+                .select('id')
+                .eq('name', buyerName)
+                .maybeSingle();
+            if (buyerError) throw buyerError;
+
+            if (buyerData && newStatus === "정상") {
+                const { error: updateError } = await supabase
+                    .from('settlements')
+                    .update({ payment_status: '수금완료' })
+                    .eq('buyer_id', buyerData.id)
+                    .eq('payment_status', '미수금');
+                if (updateError) throw updateError;
+            }
         } catch (err) {
             console.error("Failed to update buyer status:", err);
             throw err;
@@ -683,12 +747,60 @@ class BongBongStore {
                 detail: settlement.detail,
                 send_status: settlement.sendStatus,
                 sent_at: settlement.sentAt,
-                error_message: settlement.errorMessage
+                error_message: settlement.errorMessage,
+                payment_status: settlement.paymentStatus || '미수금'
             });
         if (error) {
             console.error("Failed to save settlement:", error);
             throw new Error(error.message);
         }
+    }
+
+    static async getSettlementsByBuyerName(buyerName) {
+        if (!supabase) return [];
+        try {
+            const { data: buyerData } = await supabase
+                .from('buyers')
+                .select('id')
+                .eq('name', buyerName)
+                .maybeSingle();
+            
+            if (!buyerData) return [];
+
+            const { data: settlements, error } = await supabase
+                .from('settlements')
+                .select('*')
+                .eq('buyer_id', buyerData.id)
+                .order('settled_date', { ascending: false });
+            
+            if (error) throw error;
+            return settlements.map(s => ({
+                id: s.id,
+                settledDate: s.settled_date,
+                totalAmount: s.total_amount,
+                detail: s.detail,
+                sendStatus: s.send_status,
+                paymentStatus: s.payment_status || '미수금'
+            }));
+        } catch (err) {
+            console.error("Failed to fetch settlements for buyer:", err);
+            return [];
+        }
+    }
+
+    static async updateSettlementPaymentStatus(settlementId, status) {
+        if (!supabase) return;
+        try {
+            const { error } = await supabase
+                .from('settlements')
+                .update({ payment_status: status })
+                .eq('id', settlementId);
+            if (error) throw error;
+        } catch (err) {
+            console.error("Failed to update settlement payment status:", err);
+            throw err;
+        }
+        this.dispatchStorageChange();
     }
 }
 
