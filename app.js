@@ -587,6 +587,10 @@ class BongBongStore {
             };
         } catch (err) {
             console.error("Failed to fetch analytics data:", err);
+            // (P2-2) 조용한 폴백을 사용자에게 알림 (브라우저에서만 동작)
+            if (typeof window !== 'undefined' && window.BongBongUI) {
+                window.BongBongUI.toast("분석 데이터 일부를 불러오지 못했습니다.");
+            }
             return {
                 ...ANALYTICS_DATA,
                 buyers,
@@ -637,6 +641,11 @@ class BongBongStore {
             .from('approved_owners')
             .delete()
             .eq('email', email);
+        // (P2-2) 조용한 실패 제거: 오류를 로깅하고 호출부로 전파한다.
+        if (error) {
+            console.error("Failed to delete approved owner:", error);
+            throw new Error(error.message);
+        }
     }
     static async sendAlimtalk(buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl) {
         if (!supabase) throw new Error("Database not connected");
@@ -1039,3 +1048,48 @@ class BongBongCrypt {
 }
 
 window.BongBongCrypt = BongBongCrypt;
+
+// (P2-2) 공용 사용자 알림(toast) 유틸 — 조용한 실패를 사용자에게 노출하기 위함.
+// 브라우저에서만 동작하고, document 가 없으면(테스트 등) 안전하게 no-op 한다.
+const BongBongUI = {
+    toast(message, type = 'error') {
+        try {
+            if (typeof document === 'undefined' || !document.body) return;
+            let container = document.getElementById('bb-toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'bb-toast-container';
+                container.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
+                document.body.appendChild(container);
+            }
+            const colors = { error: '#dc2626', success: '#16a34a', info: '#334155' };
+            const el = document.createElement('div');
+            el.setAttribute('role', 'status');
+            el.setAttribute('aria-live', 'polite');
+            el.style.cssText = `pointer-events:auto;max-width:90vw;padding:10px 16px;border-radius:12px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.18);background:${colors[type] || colors.info};opacity:0;transition:opacity .2s ease;`;
+            el.textContent = message;
+            container.appendChild(el);
+            requestAnimationFrame(() => { el.style.opacity = '1'; });
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 250);
+            }, 3500);
+        } catch (e) {
+            // 토스트 표시 실패가 앱 흐름을 막지 않도록 무시
+        }
+    }
+};
+window.BongBongUI = BongBongUI;
+
+// Node.js 테스트 환경을 위한 CommonJS export (브라우저에서는 module 이 없어 무시됨)
+// 테스트가 복붙 사본이 아닌 실제 프로덕션 로직을 검증하도록 한다 (드리프트 방지).
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        BongBongCalculator,
+        BongBongStore,
+        BongBongAuth,
+        BongBongCrypt,
+        BongBongUI,
+        CATEGORIES
+    };
+}

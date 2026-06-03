@@ -73,10 +73,37 @@
 
 ---
 
-## ⏳ 남은 작업 (Antigravity가 이어서 진행)
+## ✅ 완료: P2 — 안정성/품질
 
-### 🟡 P2 — 안정성/품질
-- P2-1 테스트 보강(80% 목표) · P2-2 silent failure 제거 · P2-3 폴링→Realtime · P2-4 고령 사용자 접근성
+작업일: 2026-06-03 · 검증: 단위 테스트 20/20 통과, app.js·3개 HTML 인라인 스크립트 파싱 OK
+
+### P2-1. 테스트 보강 ✔
+- **변경 파일**: `app.js`(CommonJS export 추가), `package.json`(신규), `tests/_util.js`(신규), `tests/calculator.test.js`(재작성), `tests/crypt.test.js`(신규)
+- **내용**:
+  - `app.js` 끝에 브라우저 안전한 CommonJS export 추가 → 테스트가 **복붙 사본이 아닌 실제 프로덕션 로직**을 검증(드리프트 방지).
+  - 경량 테스트 유틸(`createSuite`/`loadApp`)로 구간단가 경계값·역순 tier·null 입력·혜택정보, 암호화 패스스루·레거시 암호문·마스킹 등 **총 20개 케이스** 작성.
+  - `npm test`로 일괄 실행.
+- **AC 비고**: 순수 로직(Calculator/Crypt) 행위 커버리지 확보. 커버리지 측정 도구(c8/nyc) 도입 및 Store/UI 통합 테스트는 후속(라이브 DB 필요).
+
+### P2-2. Silent failure 제거 ✔
+- **변경 파일**: `app.js`, `index.html`, `client.html`
+- **내용**:
+  - 공용 토스트 유틸 `BongBongUI.toast()` 추가(브라우저 전용, `document` 없으면 no-op, `role/aria-live` 부여).
+  - 조용히 삼키던 렌더링 catch(분석 보드·정산 모달·품목 목록·사장님 목록·구매자 페이지)와 `getAnalyticsData` 폴백에 **사용자 토스트** 연결.
+  - `deleteApprovedOwner`가 오류를 무시하던 부분을 **로깅+전파**로 수정.
+- **AC 충족**: 실패가 사용자에게 보임 ✔ / Store 반환 계약은 유지(저위험) ✔
+
+### P2-3. 폴링 → Realtime ✔ (기존 구현 확인)
+- **상태**: `index.html`(orders·items 구독)와 `client.html`(items 구독)이 **이미 Supabase Realtime 구독**을 사용하며, `setInterval` 3초 폴링은 코드 전반에서 제거되어 있음(잔존 0건 확인). 추가 변경 불필요.
+
+### P2-4. 고령 사용자 접근성 (초기 개선) ✔ / 전체 감사 ⏳
+- **변경 파일**: `index.html`, `client.html`, `invoice.html`
+- **내용**: 3개 페이지에 **키보드 포커스 가시성(`:focus-visible`)** 과 **`prefers-reduced-motion` 모션 축소** 스타일 추가. `lang="ko"`·viewport는 기존부터 양호.
+- **⚠️ 남은 일**: 색 대비(WCAG AA)·터치 타깃 크기·아이콘 전용 버튼 `aria-label`·스크린리더 흐름은 **렌더링 기반 정식 감사 필요**(`a11y-architect` 에이전트 + 실제 브라우저 권장).
+
+---
+
+## ⏳ 남은 작업 (Antigravity가 이어서 진행)
 
 ### 🟢 P3 — 운영 준비
 - P3-1 배포 파이프라인 · P3-2 알림톡 템플릿 심사 · P3-3 온보딩 UX

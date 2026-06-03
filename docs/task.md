@@ -54,5 +54,12 @@
     - `[ ]` (배포) Solapi 발주확인 템플릿 승인 + `SOLAPI_ORDER_TEMPLATE_ID` 설정 + Edge Function 재배포
   - `[x]` (P1-3) 분석 데이터(`ANALYTICS_DATA`) 실집계 기반 동적화 + 빈 상태 처리
 
-- `[ ]` **[Phase 11] P2 안정성/품질 (다음 작업)**
-  - `[ ]` (P2-1) 테스트 보강(80% 목표) · (P2-2) silent failure 제거 · (P2-3) 폴링→Realtime · (P2-4) 고령 사용자 접근성
+- `[x]` **[Phase 11] P2 안정성/품질** — 상세: `docs/antigravity_progress.md`
+  - `[x]` (P2-1) 테스트 보강 — 실제 로직 import, 20개 케이스, `npm test`
+  - `[x]` (P2-2) silent failure 제거 — 공용 토스트 + 렌더링 catch 연결, `deleteApprovedOwner` 전파
+  - `[x]` (P2-3) 폴링→Realtime — 기존 구현 확인(orders/items/client 구독, 폴링 0건)
+  - `[x]` (P2-4) 접근성 초기 개선 — focus-visible + prefers-reduced-motion (3개 페이지)
+    - `[ ]` (후속) 색대비·터치타깃·aria-label·스크린리더 정식 WCAG 감사 (a11y-architect + 브라우저)
+
+- `[ ]` **[Phase 12] P3 운영 준비 (다음 작업)**
+  - `[ ]` (P3-1) 배포 파이프라인 · (P3-2) 알림톡 템플릿 심사 · (P3-3) 온보딩 UX
