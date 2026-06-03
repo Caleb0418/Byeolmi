@@ -781,8 +781,15 @@
                 }
                 const role = await BongBongAuth.getMyRole();
                 if (role !== 'owner') {
-                    alert("사장님(Owner)만 접근할 수 있는 페이지입니다. 발주 화면으로 이동합니다.");
-                    window.location.href = "client.html";
+                    const message = "현재 로그인된 계정은 사장님(Owner) 권한이 없습니다.\n\n" +
+                                    "• 사장님이시라면 [확인]을 눌러 다른 카카오 계정으로 다시 로그인(로그아웃 후 로그인)해 주세요.\n" +
+                                    "• 도매 구매자이시라면 [취소]를 눌러 발주 페이지로 이동합니다.";
+                    if (confirm(message)) {
+                        await BongBongAuth.signOut();
+                        await BongBongAuth.signInWithKakao();
+                    } else {
+                        window.location.href = "client.html";
+                    }
                 }
             } catch (err) {
                 console.error("Auth check failed:", err);
