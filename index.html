@@ -2111,8 +2111,8 @@
 
             items.forEach(item => {
                 const statusBadge = item.isAvailable !== false 
-                    ? `<span class="text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">공급 중</span>` 
-                    : `<span class="text-[10px] text-red-600 font-bold bg-red-50 px-1.5 py-0.5 rounded">일시 품절</span>`;
+                    ? `<span class="text-xs text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">공급 중</span>`
+                    : `<span class="text-xs text-red-600 font-bold bg-red-50 px-1.5 py-0.5 rounded">일시 품절</span>`;
                 
                 let tiersText = "";
                 if (item.tiers && item.tiers.length > 0) {
@@ -2127,7 +2127,7 @@
                 const div = `
                     <div onclick="loadProductToEditor('${item.id}')" class="p-3 bg-gray-50 hover:bg-gray-100 rounded-xl cursor-pointer transition-all border border-transparent hover:border-gray-200">
                         <div class="flex justify-between items-center">
-                            <h5 class="font-bold text-xs text-gray-800">${item.name}</h5>
+                            <h5 class="font-bold text-sm text-gray-800">${item.name}</h5>
                             ${statusBadge}
                         </div>
                         <p class="text-xs text-gray-400 mt-1">도매단가: ₩${item.basePrice.toLocaleString()} / 단위: ${item.unit}</p>
