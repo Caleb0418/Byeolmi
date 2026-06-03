@@ -260,7 +260,9 @@ class BongBongStore {
             itemId: order.item_id,
             qty: order.qty,
             time: order.time,
-            status: order.status
+            status: order.status,
+            paymentStatus: order.payment_status || '미수금',
+            createdAt: order.created_at
         }));
     }
 
@@ -491,118 +493,68 @@ class BongBongStore {
 
             const orders = await this.getOrders();
             const items = await this.getItems();
-            
-            const { data: dbSettlements, error: settlementsError } = await supabase
-                .from('settlements')
-                .select('*');
-            if (settlementsError) throw settlementsError;
 
-            const todayStats = {};
+            const buyerStats = {};
             orders.forEach(order => {
                 const item = items.find(i => i.id === order.itemId);
                 const price = BongBongCalculator.getWholesaleUnitPrice(item, order.qty);
                 const subtotal = order.qty * price;
 
-                if (!todayStats[order.buyerName]) {
-                    todayStats[order.buyerName] = {
-                        qty: 0,
+                if (!buyerStats[order.buyerName]) {
+                    buyerStats[order.buyerName] = {
+                        unpaidCount: 0,
+                        unpaidTotal: 0,
                         revenue: 0,
-                        items: {}
-                    };
-                }
-                todayStats[order.buyerName].qty += order.qty;
-                todayStats[order.buyerName].revenue += subtotal;
-                todayStats[order.buyerName].items[order.itemId] = (todayStats[order.buyerName].items[order.itemId] || 0) + order.qty;
-            });
-
-            const pastStats = {};
-            dbSettlements.forEach(settlement => {
-                const buyerObj = dbBuyers.find(b => b.id === settlement.buyer_id);
-                const buyerName = buyerObj ? buyerObj.name : "알 수 없음";
-
-                if (!pastStats[buyerName]) {
-                    pastStats[buyerName] = {
-                        qty: 0,
-                        revenue: 0,
-                        unpaidTotal: 0
+                        lastOrderDate: null
                     };
                 }
 
-                pastStats[buyerName].revenue += settlement.total_amount;
-                if (settlement.payment_status === '미수금') {
-                    pastStats[buyerName].unpaidTotal += settlement.total_amount;
+                buyerStats[order.buyerName].revenue += subtotal;
+
+                // 최근 발주 일자 갱신 (orders는 created_at 역순 정렬되어 있으므로 첫 번째 값을 취함)
+                if (!buyerStats[order.buyerName].lastOrderDate && order.createdAt) {
+                    const dateObj = new Date(order.createdAt);
+                    buyerStats[order.buyerName].lastOrderDate = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}`;
                 }
 
-                if (settlement.detail && Array.isArray(settlement.detail)) {
-                    settlement.detail.forEach(d => {
-                        pastStats[buyerName].qty += (d.qty || 0);
-                    });
+                if (order.paymentStatus === '미수금') {
+                    buyerStats[order.buyerName].unpaidCount += 1;
+                    buyerStats[order.buyerName].unpaidTotal += subtotal;
                 }
             });
 
             const resultBuyers = dbBuyers.map(buyer => {
-                const today = todayStats[buyer.name] || { qty: 0, revenue: 0, items: {} };
-                const past = pastStats[buyer.name] || { qty: 0, revenue: 0, unpaidTotal: 0 };
-
-                const totalRevenue = past.revenue + today.revenue;
-                const totalQty = past.qty + today.qty;
-
-                let mainItem = "없음";
-                let maxQty = 0;
-                Object.entries(today.items).forEach(([itemId, q]) => {
-                    if (q > maxQty) {
-                        maxQty = q;
-                        const item = items.find(i => i.id === itemId);
-                        mainItem = item ? item.name : itemId;
-                    }
-                });
-
-                if (mainItem === "없음" && past.revenue > 0) {
-                    mainItem = "기존 정산 완료 품목";
-                }
+                const stats = buyerStats[buyer.name] || { unpaidCount: 0, unpaidTotal: 0, revenue: 0, lastOrderDate: null };
 
                 let statusText = "정상";
-                if (past.unpaidTotal > 0) {
-                    statusText = `미수금 ₩${past.unpaidTotal.toLocaleString()}`;
+                if (stats.unpaidTotal > 0) {
+                    statusText = `미수금 ₩${stats.unpaidTotal.toLocaleString()}`;
                 }
 
                 return {
                     name: buyer.name,
-                    mainItem: mainItem,
-                    qty: totalQty,
-                    revenue: totalRevenue,
+                    lastOrderDate: stats.lastOrderDate || "발주 이력 없음",
+                    unpaidCount: stats.unpaidCount,
+                    revenue: stats.revenue,
                     status: statusText
                 };
             });
 
-            Object.keys(todayStats).forEach(name => {
+            // 바이어 테이블에 없으나 오늘 발주를 넣은 임시 바이어가 있다면 머지
+            Object.keys(buyerStats).forEach(name => {
                 if (!resultBuyers.some(b => b.name === name)) {
-                    const today = todayStats[name];
-                    const past = pastStats[name] || { qty: 0, revenue: 0, unpaidTotal: 0 };
-
-                    const totalRevenue = past.revenue + today.revenue;
-                    const totalQty = past.qty + today.qty;
-
-                    let mainItem = "없음";
-                    let maxQty = 0;
-                    Object.entries(today.items).forEach(([itemId, q]) => {
-                        if (q > maxQty) {
-                            maxQty = q;
-                            const item = items.find(i => i.id === itemId);
-                            mainItem = item ? item.name : itemId;
-                        }
-                    });
+                    const stats = buyerStats[name];
 
                     let statusText = "정상";
-                    if (past.unpaidTotal > 0) {
-                        statusText = `미수금 ₩${past.unpaidTotal.toLocaleString()}`;
+                    if (stats.unpaidTotal > 0) {
+                        statusText = `미수금 ₩${stats.unpaidTotal.toLocaleString()}`;
                     }
 
                     resultBuyers.push({
                         name: name,
-                        mainItem: mainItem,
-                        qty: totalQty,
-                        revenue: totalRevenue,
+                        lastOrderDate: stats.lastOrderDate || "발주 이력 없음",
+                        unpaidCount: stats.unpaidCount,
+                        revenue: stats.revenue,
                         status: statusText
                     });
                 }
@@ -618,20 +570,13 @@ class BongBongStore {
     static async updateBuyerStatus(buyerName, newStatus) {
         if (!supabase) return;
         try {
-            const { data: buyerData, error: buyerError } = await supabase
-                .from('buyers')
-                .select('id')
-                .eq('name', buyerName)
-                .maybeSingle();
-            if (buyerError) throw buyerError;
-
-            if (buyerData && newStatus === "정상") {
-                const { error: updateError } = await supabase
-                    .from('settlements')
+            if (newStatus === "정상") {
+                const { error } = await supabase
+                    .from('orders')
                     .update({ payment_status: '수금완료' })
-                    .eq('buyer_id', buyerData.id)
+                    .eq('buyer_name', buyerName)
                     .eq('payment_status', '미수금');
-                if (updateError) throw updateError;
+                if (error) throw error;
             }
         } catch (err) {
             console.error("Failed to update buyer status:", err);
@@ -798,6 +743,49 @@ class BongBongStore {
             if (error) throw error;
         } catch (err) {
             console.error("Failed to update settlement payment status:", err);
+            throw err;
+        }
+        this.dispatchStorageChange();
+    }
+
+    static async getOrdersByBuyerName(buyerName) {
+        if (!supabase) return [];
+        try {
+            const orders = await this.getOrders();
+            const items = await this.getItems();
+            
+            const buyerOrders = orders.filter(o => o.buyerName === buyerName);
+            
+            return buyerOrders.map(o => {
+                const item = items.find(i => i.id === o.itemId);
+                const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
+                
+                return {
+                    id: o.id,
+                    createdAt: o.createdAt,
+                    itemName: item ? item.name : o.itemId,
+                    qty: o.qty,
+                    unit: item ? item.unit : '박스',
+                    price: price,
+                    paymentStatus: o.paymentStatus || '미수금'
+                };
+            });
+        } catch (err) {
+            console.error("Failed to fetch orders for buyer:", err);
+            return [];
+        }
+    }
+
+    static async updateOrderPaymentStatus(orderId, status) {
+        if (!supabase) return;
+        try {
+            const { error } = await supabase
+                .from('orders')
+                .update({ payment_status: status })
+                .eq('id', orderId);
+            if (error) throw error;
+        } catch (err) {
+            console.error("Failed to update order payment status:", err);
             throw err;
         }
         this.dispatchStorageChange();
