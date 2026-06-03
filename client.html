@@ -57,62 +57,75 @@
     <!-- Header Area -->
     <header class="sticky top-0 z-50 bg-white border-b border-gray-100 px-4 py-4 flex flex-col gap-3">
         <div class="flex items-center justify-between">
-            <span class="material-symbols-outlined text-gray-400 cursor-pointer" onclick="window.close();">arrow_back</span>
+            <span class="material-symbols-outlined text-gray-400 cursor-pointer" id="header-back-btn" onclick="handleHeaderBack();">arrow_back</span>
             <div class="text-center">
-                <span class="text-xs tracking-widest text-gray-400 font-semibold block mb-0.5">올바른 선택</span>
-                <h1 class="font-serif text-xl font-bold tracking-tight text-brandDark">별미집</h1>
+                <span class="text-xs tracking-widest text-gray-400 font-semibold block mb-0.5" id="step-indicator">1 / 3 단계</span>
+                <h1 class="font-serif text-sm font-bold tracking-tight text-brandDark" id="header-title">도매 발주 품목 선택</h1>
             </div>
             <div class="flex items-center gap-3 text-gray-500">
                 <span class="material-symbols-outlined cursor-pointer" onclick="location.reload();">refresh</span>
             </div>
         </div>
-
-        <!-- 4-Category Slider -->
-        <nav class="flex gap-6 overflow-x-auto no-scrollbar border-t border-gray-50 pt-3 px-2 text-sm font-semibold">
-            <button onclick="filterCategory('all')" id="cat-all" class="text-brandDark border-b-2 border-brandDark pb-1 shrink-0">전체보기</button>
-            <button onclick="filterCategory('fresh')" id="cat-fresh" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">신선식품</button>
-            <button onclick="filterCategory('easy')" id="cat-easy" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">간편조리</button>
-            <button onclick="filterCategory('snack')" id="cat-snack" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">간식</button>
-            <button onclick="filterCategory('living')" id="cat-living" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">생활용품</button>
-        </nav>
     </header>
 
     <!-- Main Content -->
     <main class="flex-1 p-4 space-y-6">
-        
-        <!-- Welcome Hero Banner (B2B Mode) -->
-        <div class="relative bg-neutralBg border border-gray-100 p-5 rounded-2xl space-y-1 overflow-hidden">
-            <h2 class="font-serif text-lg font-bold">도매 파트너 발주방</h2>
-            <p class="text-xs text-gray-500">도매 공급 품목 발주 전용 페이지입니다. 품목을 선택하고 수량을 전송해 주세요.</p>
-            <div class="absolute -right-4 -bottom-4 opacity-5">
-                <span class="material-symbols-outlined text-8xl">local_mall</span>
+        <div id="closed-alert" class="hidden bg-red-50 text-red-700 p-4 rounded-xl text-center font-bold text-xs">
+            ⚠️ 금일 도매 주문 접수가 종료되었습니다.
+        </div>
+
+        <!-- STEP 1: Product Selection -->
+        <div id="step-1" class="step-container space-y-6">
+            <!-- 4-Category Slider -->
+            <nav class="flex gap-6 overflow-x-auto no-scrollbar border-b border-gray-50 pb-3 px-2 text-sm font-semibold">
+                <button onclick="filterCategory('all')" id="cat-all" class="text-brandDark border-b-2 border-brandDark pb-1 shrink-0">전체보기</button>
+                <button onclick="filterCategory('fresh')" id="cat-fresh" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">신선식품</button>
+                <button onclick="filterCategory('easy')" id="cat-easy" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">간편조리</button>
+                <button onclick="filterCategory('snack')" id="cat-snack" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">간식</button>
+                <button onclick="filterCategory('living')" id="cat-living" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">생활용품</button>
+            </nav>
+
+            <!-- Welcome Hero Banner (B2B Mode) -->
+            <div class="relative bg-neutralBg border border-gray-100 p-5 rounded-2xl space-y-1 overflow-hidden">
+                <h2 class="font-serif text-lg font-bold">도매 파트너 발주방</h2>
+                <p class="text-xs text-gray-500">도매 공급 품목 발주 전용 페이지입니다. 품목별 발주할 수량을 담아주세요.</p>
+                <div class="absolute -right-4 -bottom-4 opacity-5">
+                    <span class="material-symbols-outlined text-8xl">local_mall</span>
+                </div>
+            </div>
+
+            <!-- Dynamic Product Catalog List (No Tiers, No Price Info) -->
+            <section class="space-y-4">
+                <h3 class="font-bold text-sm tracking-tight flex items-center gap-1.5 text-brandDark border-b pb-2">
+                    <span class="material-symbols-outlined text-brandAccent text-lg">list_alt</span>
+                    취급 도매 품목 카탈로그
+                </h3>
+                
+                <div id="tiers-container" class="space-y-3">
+                    <!-- Dynamic Items will be rendered here -->
+                </div>
+            </section>
+
+            <!-- Padding to prevent button overlapping -->
+            <div class="h-24"></div>
+
+            <!-- STEP 1 Bottom Floating Action Bar -->
+            <div id="floating-bar" class="hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] p-4 bg-gradient-to-t from-white via-white/95 to-transparent z-40">
+                <button onclick="goToStep(2)" class="w-full bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-lg transform active:scale-98 transition-all flex items-center justify-center gap-2 text-sm">
+                    <span id="selected-summary-txt">0개 품목 선택됨</span>
+                    <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                </button>
             </div>
         </div>
 
-        <!-- Dynamic Product Catalog List (No Tiers, No Price Info) -->
-        <section class="space-y-4">
-            <h3 class="font-bold text-sm tracking-tight flex items-center gap-1.5 text-brandDark border-b pb-2">
-                <span class="material-symbols-outlined text-brandAccent text-lg">list_alt</span>
-                취급 도매 품목 카탈로그
-            </h3>
-            
-            <div id="tiers-container" class="space-y-2">
-                <!-- Dynamic Items will be rendered here -->
-            </div>
-        </section>
-
-        <!-- Order Form Section -->
-        <section class="border-t pt-5 space-y-4">
-            <h3 class="font-bold text-sm text-brandDark flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-gray-500 text-lg">edit_document</span>
-                도매 발주 신청서 작성
-            </h3>
-            
-            <div id="closed-alert" class="hidden bg-red-50 text-red-700 p-4 rounded-xl text-center font-bold text-xs">
-                ⚠️ 금일 도매 주문 접수가 종료되었습니다.
+        <!-- STEP 2: Buyer Info Input -->
+        <div id="step-2" class="step-container hidden space-y-6">
+            <div class="bg-neutralBg border border-gray-100 p-5 rounded-2xl space-y-1">
+                <h2 class="font-serif text-lg font-bold">발주자 정보 입력</h2>
+                <p class="text-xs text-gray-500">정확한 도매 정산 및 알림톡 전송을 위해 발주자의 정보를 확인해 주세요.</p>
             </div>
 
-            <form id="order-form" class="space-y-4">
+            <form id="buyer-info-form" class="space-y-4" onsubmit="event.preventDefault(); handleStep2Submit();">
                 <!-- Buyer Name -->
                 <div>
                     <label class="block text-[11px] font-bold text-gray-400 mb-1">발주 등록 대표자명 / 업체명</label>
@@ -127,36 +140,55 @@
                            class="w-full rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark text-sm py-3 px-4">
                 </div>
 
-                <!-- Item Select -->
-                <div>
-                    <label class="block text-[11px] font-bold text-gray-400 mb-1">발주 품목 선택</label>
-                    <select id="item-select" class="w-full rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark text-sm py-3 px-4">
-                        <!-- Dynamic items -->
-                    </select>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="goToStep(1)" class="w-1/3 border border-gray-200 text-gray-700 font-bold py-4 rounded-xl hover:bg-gray-50 active:scale-98 transition-all text-sm">
+                        이전으로
+                    </button>
+                    <button type="submit" class="w-2/3 bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm transform active:scale-98 transition-all flex items-center justify-center gap-2 text-sm">
+                        발주 정보 확인
+                        <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                    </button>
                 </div>
+            </form>
+        </div>
 
-                <!-- Quantity Controller -->
+        <!-- STEP 3: Final Confirmation -->
+        <div id="step-3" class="step-container hidden space-y-6">
+            <div class="bg-neutralBg border border-gray-100 p-5 rounded-2xl text-center space-y-2">
+                <span class="material-symbols-outlined text-brandAccent text-4xl">task_alt</span>
+                <h2 class="font-serif text-lg font-bold">이 주문이 맞습니까?</h2>
+                <p class="text-xs text-gray-500">최종 전송 전에 품목, 수량 및 발주자 정보를 다시 한번 확인해 주세요.</p>
+            </div>
+
+            <!-- Summary Box -->
+            <div class="border border-gray-100 rounded-2xl p-5 bg-white space-y-4">
                 <div>
-                    <label class="block text-[11px] font-bold text-gray-400 mb-1">발주 수량 (박스/단위)</label>
-                    <div class="flex items-center gap-4 mt-1">
-                        <button type="button" id="qty-minus" class="w-12 h-12 rounded-xl border flex items-center justify-center font-bold text-lg hover:bg-gray-50 active:scale-95">-</button>
-                        <input type="number" id="qty-input" value="5" min="1" required 
-                               class="w-20 text-center font-bold rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark py-3 text-lg">
-                        <button type="button" id="qty-plus" class="w-12 h-12 rounded-xl border flex items-center justify-center font-bold text-lg hover:bg-gray-50 active:scale-95">+</button>
+                    <h3 class="text-xs font-bold text-gray-400 mb-1">발주자 정보</h3>
+                    <div class="text-sm font-semibold text-brandDark" id="summary-buyer-info">
+                        --
                     </div>
                 </div>
 
+                <hr class="border-gray-100">
 
+                <div>
+                    <h3 class="text-xs font-bold text-gray-400 mb-2">선택한 발주 품목 목록</h3>
+                    <div id="summary-items-list" class="space-y-2">
+                        <!-- Summary list of items will be injected here -->
+                    </div>
+                </div>
+            </div>
 
-                <!-- Submit Button -->
-                <button type="submit" id="submit-btn" 
-                        class="w-full bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm transform active:scale-98 transition-all flex items-center justify-center gap-2 text-sm">
-                    <span class="material-symbols-outlined text-sm">check_circle</span>
-                    발주서 전송하기
+            <div class="flex gap-3">
+                <button type="button" onclick="goToStep(2)" class="w-1/3 border border-gray-200 text-gray-700 font-bold py-4 rounded-xl hover:bg-gray-50 active:scale-98 transition-all text-sm">
+                    정보 수정
                 </button>
-            </form>
-        </section>
-
+                <button type="button" onclick="submitFinalOrder()" id="submit-btn" class="w-2/3 bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm transform active:scale-98 transition-all flex items-center justify-center gap-2 text-sm">
+                    <span class="material-symbols-outlined text-sm">check_circle</span>
+                    최종 발주서 전송하기
+                </button>
+            </div>
+        </div>
     </main>
 
     <!-- Footer Area (Synced with Cafe24 Screenshot) -->
@@ -225,36 +257,20 @@
 <script src="app.js"></script>
 <script>
     let activeCategory = 'all';
+    let currentStep = 1;
+    const selectedItems = new Map(); // Store item quantities. key: itemId, value: qty
 
     document.addEventListener("DOMContentLoaded", async () => {
-        const itemSelect = document.getElementById("item-select");
-        const qtyInput = document.getElementById("qty-input");
-        const orderForm = document.getElementById("order-form");
-
         // 0-0. 마감 여부 실시간 확인 및 UI 차단
         async function checkClosedStatus() {
             try {
                 const isClosed = await BongBongStore.isClosed();
                 const closedAlert = document.getElementById("closed-alert");
-                const submitBtn = document.getElementById("submit-btn");
-                const buyerInput = document.getElementById("buyer-name");
-                const contactInput = document.getElementById("buyer-contact");
-                const qtyMinus = document.getElementById("qty-minus");
-                const qtyPlus = document.getElementById("qty-plus");
-
+                
                 if (isClosed) {
                     if (closedAlert) closedAlert.classList.remove("hidden");
-                    if (submitBtn) {
-                        submitBtn.disabled = true;
-                        submitBtn.className = "w-full bg-gray-350 text-gray-500 font-bold py-4 rounded-xl shadow-sm text-sm cursor-not-allowed flex items-center justify-center gap-2";
-                        submitBtn.innerHTML = `<span class="material-symbols-outlined text-sm">block</span> 금일 발주가 마감되었습니다`;
-                    }
-                    if (buyerInput) buyerInput.disabled = true;
-                    if (contactInput) contactInput.disabled = true;
-                    if (itemSelect) itemSelect.disabled = true;
-                    if (qtyInput) qtyInput.disabled = true;
-                    if (qtyMinus) qtyMinus.disabled = true;
-                    if (qtyPlus) qtyPlus.disabled = true;
+                    document.body.classList.add("order-closed");
+                    updateUIForClosed();
                 }
             } catch (err) {
                 console.error("Failed to check closed status:", err);
@@ -294,7 +310,7 @@
                 // 기존 로그인 세션이 있는 경우 (우선순위 2)
                 const user = await BongBongAuth.getCurrentUser();
                 if (user) {
-                    const { data, error } = await supabase
+                    const { data } = await supabase
                         .from('buyers')
                         .select('name, contact')
                         .eq('auth_uid', user.id)
@@ -326,64 +342,10 @@
             document.getElementById("buyer-contact").value = cachedContact;
         }
 
-        // 2. 수량 증감 제어
-        document.getElementById("qty-minus").addEventListener("click", async () => {
-            let val = parseInt(qtyInput.value, 10);
-            if (val > 1) {
-                qtyInput.value = val - 1;
-                await updateRealtimeBenefit();
-            }
-        });
-
-        document.getElementById("qty-plus").addEventListener("click", async () => {
-            let val = parseInt(qtyInput.value, 10);
-            qtyInput.value = val + 1;
-            await updateRealtimeBenefit();
-        });
-
-        qtyInput.addEventListener("input", async () => {
-            await updateRealtimeBenefit();
-        });
-        
-        itemSelect.addEventListener("change", async () => {
-            await updateRealtimeBenefit();
-        });
-
-        // 3. 주문 제출 이벤트 (Zod 검증)
-        orderForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const buyerName = document.getElementById("buyer-name").value.trim();
-            const buyerContact = document.getElementById("buyer-contact").value.trim();
-            const itemId = itemSelect.value;
-            const qty = qtyInput.value;
-
-            try {
-                localStorage.setItem("bb_cached_buyer_name", buyerName);
-                localStorage.setItem("bb_cached_buyer_contact", buyerContact);
-                await BongBongStore.addOrder(buyerName, itemId, qty, buyerContact);
-
-                const items = await BongBongStore.getItems();
-                const itemName = items.find(i=>i.id===itemId).name;
-                
-                openOrderSuccessDrawer(buyerName, itemName, qty);
-                
-                await renderPage();
-                qtyInput.value = 5;
-                await updateRealtimeBenefit();
-            } catch (error) {
-                console.error("주문 전송 에러:", error);
-                if (error.errors) {
-                    const errorMsg = error.errors.map(err => `• ${err.message}`).join("\n");
-                    alert(`발주 정보 입력 값이 올바르지 않습니다.\n\n${errorMsg}`);
-                } else {
-                    alert(`주문 전송 중 오류가 발생했습니다: ${error.message}`);
-                }
-            }
-        });
-
         await renderPage();
-        await updateRealtimeBenefit();
-        // Supabase Realtime 구독 설정 (품목 변동 또는 할인 구간 설정 변동 시 동적 반영)
+        updateFloatingBar();
+
+        // Supabase Realtime 구독 설정
         if (supabase) {
             supabase
                 .channel('bb_client_changes')
@@ -392,16 +354,23 @@
                     { event: '*', schema: 'public', table: 'items' },
                     async () => {
                         await renderPage();
-                        await updateRealtimeBenefit();
                     }
                 )
                 .subscribe();
         }
     });
 
-    // 실시간 도매 혜택 상태 및 계산 피드백 (가격 비노출로 인해 No-op 처리)
-    async function updateRealtimeBenefit() {
-        // No-op
+    // 마감 시 UI 비활성화 함수
+    function updateUIForClosed() {
+        const inputs = document.querySelectorAll("#step-2 input");
+        inputs.forEach(input => {
+            input.disabled = true;
+        });
+        const submitBtn = document.getElementById("submit-btn");
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.classList.add("opacity-50", "cursor-not-allowed");
+        }
     }
 
     // 카테고리 필터 변경
@@ -419,17 +388,14 @@
             }
         });
         await renderPage();
-        await updateRealtimeBenefit();
     }
 
-    // 전체 화면 리프레시 렌더링 (달성율 게이지바 완전 제거)
+    // 카탈로그 리스트 렌더링
     async function renderPage() {
         try {
             const items = await BongBongStore.getItems();
-            const itemSelect = document.getElementById("item-select");
             const container = document.getElementById("tiers-container");
 
-            itemSelect.innerHTML = "";
             container.innerHTML = "";
 
             const filteredItems = activeCategory === 'all' 
@@ -441,52 +407,278 @@
                 return;
             }
 
+            const isClosed = await BongBongStore.isClosed();
+
             filteredItems.forEach(item => {
                 const isAvail = item.isAvailable !== false;
-                
-                // 드롭다운 바인딩
-                const opt = document.createElement("option");
-                opt.value = item.id;
-                if (isAvail) {
-                    opt.textContent = item.name;
-                } else {
-                    opt.textContent = `${item.name} (일시 품절)`;
-                    opt.disabled = true;
-                }
-                itemSelect.appendChild(opt);
-
-                // 단순 품목 텍스트 카드 렌더링
                 const badgeClass = isAvail 
                     ? "text-brandAccent bg-green-50 border-brandAccent/20" 
                     : "text-red-500 bg-red-50 border-red-200";
                 const badgeText = isAvail ? "공급 중" : "일시 품절";
                 const opacityClass = isAvail ? "" : "opacity-60";
 
+                const currentQty = selectedItems.get(item.id) || 0;
+
+                // 수량 조절기 렌더링
+                let qtyControllerHtml = "";
+                if (!isAvail) {
+                    qtyControllerHtml = `<span class="px-2.5 py-1 border rounded-lg text-[10px] font-bold ${badgeClass}">${badgeText}</span>`;
+                } else if (isClosed) {
+                    qtyControllerHtml = `<span class="px-2.5 py-1 bg-gray-100 text-gray-400 border rounded-lg text-[10px] font-bold">주문 마감</span>`;
+                } else {
+                    qtyControllerHtml = `
+                        <div class="flex items-center gap-1 border border-gray-200 rounded-xl p-1 bg-gray-50">
+                            <button type="button" onclick="changeItemQty('${item.id}', -1)" class="w-8 h-8 rounded-lg bg-white border flex items-center justify-center font-bold text-sm shadow-sm active:scale-90 hover:bg-gray-100">-</button>
+                            <input type="number" id="qty-input-${item.id}" value="${currentQty}" min="0" oninput="handleItemInputQty('${item.id}', this.value)" onblur="normalizeItemQty('${item.id}', this)" class="w-12 text-center font-bold text-sm text-brandDark bg-transparent border-0 focus:ring-0 p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                            <button type="button" onclick="changeItemQty('${item.id}', 1)" class="w-8 h-8 rounded-lg bg-white border flex items-center justify-center font-bold text-sm shadow-sm active:scale-90 hover:bg-gray-100">+</button>
+                        </div>
+                    `;
+                }
+
                 const itemHtml = `
-                    <div class="p-4 border border-gray-100 rounded-xl bg-white flex flex-col justify-between hover:shadow-sm transition-all ${opacityClass}">
-                        <div class="flex justify-between items-start w-full">
-                            <div>
-                                <h4 class="font-bold text-gray-900 text-xs">${item.name}</h4>
-                                <p class="text-[10px] text-gray-400 mt-1">단위: ${item.unit}</p>
-                            </div>
-                            <span class="px-2.5 py-1 border rounded-lg text-[10px] font-bold ${badgeClass}">${badgeText}</span>
+                    <div class="p-4 border border-gray-100 rounded-xl bg-white flex items-center justify-between hover:shadow-sm transition-all ${opacityClass}">
+                        <div>
+                            <h4 class="font-bold text-gray-900 text-sm">${item.name}</h4>
+                            <p class="text-[10px] text-gray-400 mt-0.5">단위: ${item.unit}</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            ${qtyControllerHtml}
                         </div>
                     </div>
                 `;
                 container.insertAdjacentHTML("beforeend", itemHtml);
             });
-
-            // 드롭다운에서 비활성화되지 않은 첫 번째 옵션을 기본 선택값으로 지정
-            for (let i = 0; i < itemSelect.options.length; i++) {
-                if (!itemSelect.options[i].disabled) {
-                    itemSelect.selectedIndex = i;
-                    break;
-                }
-            }
         } catch (err) {
             console.error("Failed to render page:", err);
         }
     }
+
+    // 수량 변경 함수
+    window.changeItemQty = function(itemId, delta) {
+        let currentQty = selectedItems.get(itemId) || 0;
+        let newQty = currentQty + delta;
+        if (newQty < 0) {
+            newQty = 0;
+        }
+        
+        if (newQty === 0) {
+            selectedItems.delete(itemId);
+        } else {
+            selectedItems.set(itemId, newQty);
+        }
+
+        const inputEl = document.getElementById(`qty-input-${itemId}`);
+        if (inputEl) {
+            inputEl.value = newQty;
+        }
+
+        updateFloatingBar();
+    };
+
+    // 수기 입력 처리 함수
+    window.handleItemInputQty = function(itemId, rawValue) {
+        let parsed = parseInt(rawValue, 10);
+        if (isNaN(parsed) || parsed < 0) {
+            parsed = 0;
+        }
+
+        if (parsed === 0) {
+            selectedItems.delete(itemId);
+        } else {
+            selectedItems.set(itemId, parsed);
+        }
+
+        updateFloatingBar();
+    };
+
+    // 입력 마감 시 보정
+    window.normalizeItemQty = function(itemId, inputEl) {
+        let parsed = parseInt(inputEl.value, 10);
+        if (isNaN(parsed) || parsed < 0) {
+            parsed = 0;
+        }
+        inputEl.value = parsed;
+        if (parsed === 0) {
+            selectedItems.delete(itemId);
+        } else {
+            selectedItems.set(itemId, parsed);
+        }
+        updateFloatingBar();
+    };
+
+    // 플로팅 바 업데이트
+    function updateFloatingBar() {
+        const floatingBar = document.getElementById("floating-bar");
+        const summaryText = document.getElementById("selected-summary-txt");
+
+        let totalQty = 0;
+        let uniqueItemsCount = 0;
+        selectedItems.forEach((qty) => {
+            if (qty > 0) {
+                totalQty += qty;
+                uniqueItemsCount++;
+            }
+        });
+
+        if (uniqueItemsCount > 0) {
+            floatingBar.classList.remove("hidden");
+            summaryText.textContent = `총 ${uniqueItemsCount}개 품목 (${totalQty}개 수량) 다음 단계로`;
+        } else {
+            floatingBar.classList.add("hidden");
+        }
+    }
+
+    // 단계별 위저드 이동 제어
+    window.goToStep = async function(stepNumber) {
+        currentStep = stepNumber;
+        const step1 = document.getElementById("step-1");
+        const step2 = document.getElementById("step-2");
+        const step3 = document.getElementById("step-3");
+        
+        const stepIndicator = document.getElementById("step-indicator");
+        const headerTitle = document.getElementById("header-title");
+
+        step1.classList.add("hidden");
+        step2.classList.add("hidden");
+        step3.classList.add("hidden");
+
+        if (stepNumber === 1) {
+            step1.classList.remove("hidden");
+            stepIndicator.textContent = "1 / 3 단계";
+            headerTitle.textContent = "도매 발주 품목 선택";
+            updateFloatingBar();
+        } else if (stepNumber === 2) {
+            step2.classList.remove("hidden");
+            stepIndicator.textContent = "2 / 3 단계";
+            headerTitle.textContent = "발주자 정보 입력";
+        } else if (stepNumber === 3) {
+            step3.classList.remove("hidden");
+            stepIndicator.textContent = "3 / 3 단계";
+            headerTitle.textContent = "최종 정보 확인";
+            await renderSummaryStep();
+        }
+    };
+
+    // 헤더 뒤로가기 버튼 처리
+    window.handleHeaderBack = function() {
+        if (currentStep === 1) {
+            window.close();
+        } else if (currentStep === 2) {
+            goToStep(1);
+        } else if (currentStep === 3) {
+            goToStep(2);
+        }
+    };
+
+    // 2단계 정보 유효성 검사 및 다음 단계 이동
+    window.handleStep2Submit = function() {
+        const buyerName = document.getElementById("buyer-name").value.trim();
+        const buyerContact = document.getElementById("buyer-contact").value.trim();
+
+        if (window.z && OrderSchema) {
+            try {
+                OrderSchema.parse({
+                    buyerName,
+                    buyerContact,
+                    itemId: "temp_validation_id",
+                    qty: 1
+                });
+            } catch (err) {
+                if (err.errors) {
+                    const errorMsg = err.errors.map(e => `• ${e.message}`).join("\n");
+                    alert(`입력 값이 올바르지 않습니다.\n\n${errorMsg}`);
+                } else {
+                    alert(`오류가 발생했습니다: ${err.message}`);
+                }
+                return;
+            }
+        }
+
+        goToStep(3);
+    };
+
+    // 3단계 최종 확인 페이지 렌더링
+    async function renderSummaryStep() {
+        const buyerName = document.getElementById("buyer-name").value.trim();
+        const buyerContact = document.getElementById("buyer-contact").value.trim();
+        const summaryBuyerInfo = document.getElementById("summary-buyer-info");
+        const summaryItemsList = document.getElementById("summary-items-list");
+
+        summaryBuyerInfo.innerHTML = `
+            <p class="font-bold text-gray-900 text-sm">${buyerName}</p>
+            <p class="text-xs text-gray-500 mt-1">${buyerContact || '연락처 미등록'}</p>
+        `;
+
+        summaryItemsList.innerHTML = "";
+
+        try {
+            const items = await BongBongStore.getItems();
+            selectedItems.forEach((qty, itemId) => {
+                const item = items.find(i => i.id === itemId);
+                if (item) {
+                    const itemSummaryHtml = `
+                        <div class="flex justify-between items-center py-2 border-b border-gray-50 text-xs">
+                            <span class="font-medium text-gray-800">${item.name}</span>
+                            <span class="font-bold text-brandDark text-sm">${qty}${item.unit}</span>
+                        </div>
+                    `;
+                    summaryItemsList.insertAdjacentHTML("beforeend", itemSummaryHtml);
+                }
+            });
+        } catch (err) {
+            console.error("Summary loading failed:", err);
+        }
+    }
+
+    // 최종 발주서 전송하기
+    window.submitFinalOrder = async function() {
+        const buyerName = document.getElementById("buyer-name").value.trim();
+        const buyerContact = document.getElementById("buyer-contact").value.trim();
+        const submitBtn = document.getElementById("submit-btn");
+
+        if (selectedItems.size === 0) {
+            alert("선택된 발주 품목이 없습니다.");
+            goToStep(1);
+            return;
+        }
+
+        try {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<span class="material-symbols-outlined animate-spin text-sm">sync</span> 전송 중...`;
+
+            localStorage.setItem("bb_cached_buyer_name", buyerName);
+            localStorage.setItem("bb_cached_buyer_contact", buyerContact);
+
+            const items = await BongBongStore.getItems();
+            const orderPromises = [];
+            const summaryDetails = [];
+
+            selectedItems.forEach((qty, itemId) => {
+                const item = items.find(i => i.id === itemId);
+                if (item) {
+                    orderPromises.push(BongBongStore.addOrder(buyerName, itemId, qty, buyerContact));
+                    summaryDetails.push(`${item.name} ${qty}${item.unit}`);
+                }
+            });
+
+            const results = await Promise.all(orderPromises);
+
+            const itemsSummaryTxt = summaryDetails.join(", ");
+            const totalQty = Array.from(selectedItems.values()).reduce((sum, q) => sum + q, 0);
+
+            openOrderSuccessDrawer(buyerName, itemsSummaryTxt, totalQty);
+
+            selectedItems.clear();
+            await renderPage();
+            goToStep(1);
+        } catch (error) {
+            console.error("최종 주문 전송 에러:", error);
+            alert(`주문 전송 중 오류가 발생했습니다: ${error.message}`);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<span class="material-symbols-outlined text-sm">check_circle</span> 최종 발주서 전송하기`;
+        }
+    };
 
     window.openOrderSuccessDrawer = function(buyerName, itemName, qty) {
         const drawer = document.getElementById("order-success-drawer");
@@ -494,7 +686,7 @@
         
         document.getElementById("receipt-buyer").textContent = buyerName;
         document.getElementById("receipt-item").textContent = itemName;
-        document.getElementById("receipt-qty").textContent = qty + "박스";
+        document.getElementById("receipt-qty").textContent = qty + " 박스/단위";
         
         drawer.classList.remove("hidden");
         setTimeout(() => {
