@@ -333,7 +333,34 @@ class BongBongStore {
         // RLS 및 데이터 관계 매핑을 위한 buyer_id 조회 또는 생성
         let buyerId = null;
         const { data: { user } } = await supabase.auth.getUser();
-        
+
+        // 비로그인 발주: buyers/orders 테이블 INSERT 정책이 인증을 요구하므로
+        // 검증된 SECURITY DEFINER RPC(submit_anonymous_order)를 단일 진입점으로 경유한다.
+        // (마이그레이션 20260604000001_anonymous_order_rpc.sql)
+        if (!user) {
+            const { data: orderId, error: rpcError } = await supabase.rpc('submit_anonymous_order', {
+                p_buyer_name: buyerName,
+                p_contact: formattedContact || null,
+                p_item_id: itemId,
+                p_qty: parsedQty
+            });
+            if (rpcError) {
+                console.error("Failed to add order (anonymous):", rpcError);
+                throw new Error(rpcError.message);
+            }
+            this.dispatchStorageChange();
+            const now = new Date();
+            const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            return {
+                id: orderId,
+                buyerName,
+                itemId,
+                qty: parsedQty,
+                time: timeStr,
+                status: "대기"
+            };
+        }
+
         // 1. 로그인된 상태라면 auth_uid 기반으로 우선 조회
         if (user) {
             const { data: buyerData } = await supabase
@@ -659,8 +686,8 @@ class BongBongStore {
         return {
             business_name: '별미집',
             bank_name: '국민은행',
-            account_number: '646801-01-557728',
-            account_holder: '김봉준(우모유통)'
+            account_number: '000-0000-0000-00',
+            account_holder: '샘플(테스트)'
         };
     }
 

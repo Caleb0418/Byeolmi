@@ -270,6 +270,61 @@ end;
 $$;
 
 
+-- 4-2. 비로그인 즉시 발주용 진입점 (SECURITY DEFINER RPC)
+-- orders/buyers 테이블 SELECT/INSERT 정책은 잠근 채로, 검증된 이 함수만 anon 에게 노출한다.
+-- (마이그레이션 20260604000001_anonymous_order_rpc.sql 와 동일)
+create or replace function public.submit_anonymous_order(
+  p_buyer_name text,
+  p_contact    text,
+  p_item_id    text,
+  p_qty        integer
+)
+returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_buyer_id uuid;
+  v_order_id bigint;
+  v_name     text := nullif(trim(p_buyer_name), '');
+  v_contact  text := nullif(trim(coalesce(p_contact, '')), '');
+begin
+  if v_name is null then
+    raise exception '거래처명(대표자/업체명)이 필요합니다.';
+  end if;
+  if p_qty is null or p_qty <= 0 then
+    raise exception '발주 수량은 1 이상이어야 합니다.';
+  end if;
+  if not exists (select 1 from items where id = p_item_id and is_available) then
+    raise exception '판매 중인 품목이 아닙니다.';
+  end if;
+
+  select id into v_buyer_id from buyers where name = v_name limit 1;
+  if v_buyer_id is null then
+    insert into buyers (name, contact) values (v_name, v_contact)
+    returning id into v_buyer_id;
+  elsif v_contact is not null then
+    update buyers
+       set contact = v_contact
+     where id = v_buyer_id
+       and (contact is null or contact = '');
+  end if;
+
+  insert into orders (buyer_id, buyer_name, item_id, qty, status, time)
+  values (
+    v_buyer_id, v_name, p_item_id, p_qty, '대기',
+    to_char(now() at time zone 'Asia/Seoul', 'HH24:MI')
+  )
+  returning id into v_order_id;
+
+  return v_order_id;
+end;
+$$;
+
+grant execute on function public.submit_anonymous_order(text, text, text, integer) to anon, authenticated;
+
+
 -- 5. 테스트용 시드(Seed) 데이터 주입
 -- 5-0. 초기 사장님(owner) 화이트리스트 등록 (handle_new_user 트리거가 참조)
 insert into approved_owners (email) values

@@ -919,12 +919,12 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-bold text-gray-500 mb-1">예금주</label>
-                                <input type="text" id="setting-account-holder" placeholder="예: 김봉준(우모유통)" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
+                                <input type="text" id="setting-account-holder" placeholder="예: 샘플(테스트)" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
                             </div>
                         </div>
                         <div>
                             <label class="block text-sm font-bold text-gray-500 mb-1">계좌번호</label>
-                            <input type="text" id="setting-account-number" placeholder="예: 646801-01-557728" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
+                            <input type="text" id="setting-account-number" placeholder="예: 000-0000-0000-00" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
                         </div>
                         <button type="submit" class="w-full bg-primary text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-opacity-90">계좌·상호 저장</button>
                     </form>
@@ -1059,35 +1059,50 @@
         // Elements
         const orderTableBody = document.getElementById("order-table-body");
 
+        // (임시/데모) 정식 도입 전까지 사장님 대시보드를 누구나 열람·체험할 수 있도록 개방한다.
+        // TODO[접근제어 복원]: 사장님이 정식 사용을 결정하면 아래 플래그를 false 로 되돌려
+        //   로그인 + owner 권한 게이트를 복원할 것.
+        //   (DB 측은 마이그레이션 20260604000002_temp_open_dashboard_demo.sql 의
+        //    TEMP_DEMO_* 정책을 DROP 하여 함께 복원한다.)
+        const DEMO_OPEN_ACCESS = true;
+
         // 0. 사장님(Owner) 권한 체크
         async function checkDashboardAuth() {
             if (!supabase) return;
             try {
                 const user = await BongBongAuth.getCurrentUser();
-                if (!user) {
-                    // 로그인되지 않은 경우 카카오 로그인 요청
-                    if (confirm("로그인이 필요한 서비스입니다. 카카오 로그인 페이지로 이동하시겠습니까?")) {
-                        await BongBongAuth.signInWithKakao('/index.html');
+
+                // 데모 개방 모드가 아닐 때만 로그인/권한을 강제한다.
+                if (!DEMO_OPEN_ACCESS) {
+                    if (!user) {
+                        // 로그인되지 않은 경우 카카오 로그인 요청
+                        if (confirm("로그인이 필요한 서비스입니다. 카카오 로그인 페이지로 이동하시겠습니까?")) {
+                            await BongBongAuth.signInWithKakao('/index.html');
+                        }
+                        return;
                     }
-                    return;
-                }
-                const role = await BongBongAuth.getMyRole();
-                if (role !== 'owner') {
-                    const message = "현재 로그인된 계정은 사장님(Owner) 권한이 없습니다.\n\n" +
-                                    "• 사장님이시라면 [확인]을 눌러 다른 카카오 계정으로 다시 로그인(로그아웃 후 로그인)해 주세요.\n" +
-                                    "• 도매 구매자이시라면 [취소]를 눌러 발주 페이지로 이동합니다.";
-                    if (confirm(message)) {
-                        await BongBongAuth.signOut();
-                        await BongBongAuth.signInWithKakao('/index.html');
-                    } else {
-                        window.location.href = "client.html";
+                    const role = await BongBongAuth.getMyRole();
+                    if (role !== 'owner') {
+                        const message = "현재 로그인된 계정은 사장님(Owner) 권한이 없습니다.\n\n" +
+                                        "• 사장님이시라면 [확인]을 눌러 다른 카카오 계정으로 다시 로그인(로그아웃 후 로그인)해 주세요.\n" +
+                                        "• 도매 구매자이시라면 [취소]를 눌러 발주 페이지로 이동합니다.";
+                        if (confirm(message)) {
+                            await BongBongAuth.signOut();
+                            await BongBongAuth.signInWithKakao('/index.html');
+                        } else {
+                            window.location.href = "client.html";
+                        }
+                        return;
                     }
-                    return;
                 }
 
-                // 로그인된 계정 프로필 세팅
-                const ownerName = user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.user_name || "관리자";
+                // 프로필 세팅 (비로그인 데모 열람 시에는 안내 라벨 표시)
                 const displayEl = document.getElementById("owner-name-display");
+                if (!user) {
+                    if (displayEl) displayEl.textContent = "둘러보기 (데모)";
+                    return;
+                }
+                const ownerName = user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.user_name || "관리자";
                 if (displayEl) {
                     // 이름 뒤에 사장님 타이틀이 이미 붙어있지 않은 경우에만 동적으로 덧붙임
                     if (ownerName.includes("사장님")) {
@@ -1096,7 +1111,7 @@
                         displayEl.textContent = `${ownerName} 사장님`;
                     }
                 }
-                
+
                 const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture;
                 if (avatarUrl) {
                     const avatarEl = document.getElementById("owner-avatar");
