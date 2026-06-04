@@ -72,8 +72,12 @@
     
     <!-- Header Area -->
     <header class="sticky top-0 z-50 bg-white border-b border-gray-100 px-4 py-4 flex flex-col gap-3">
+        <!-- 브랜드 바: 상호(별미집) 노출 -->
+        <div class="flex items-center justify-center">
+            <span class="font-serif text-base font-extrabold tracking-tight text-primary">별미집</span>
+        </div>
         <div class="flex items-center justify-between">
-            <span class="material-symbols-outlined text-gray-400 cursor-pointer" id="header-back-btn" onclick="handleHeaderBack();">arrow_back</span>
+            <span class="material-symbols-outlined text-gray-400 cursor-pointer invisible" id="header-back-btn" onclick="handleHeaderBack();">arrow_back</span>
             <div class="text-center">
                 <span class="text-xs tracking-widest text-gray-400 font-semibold block mb-0.5" id="step-indicator">1 / 3 단계</span>
                 <h1 class="font-serif text-sm font-bold tracking-tight text-primary" id="header-title">도매 발주 품목 선택</h1>
@@ -213,14 +217,14 @@
     <footer class="p-6 bg-neutralBg border-t border-gray-200/60 text-[11px] text-gray-500 space-y-4">
         <div class="space-y-1">
             <h4 class="font-serif text-sm font-bold text-primary mb-2">올바른 선택 별미집</h4>
-            <p>상호명: 우모유통 | 대표자명: 김봉준</p>
-            <p>사업장 주소: 22350 인천광역시 중구 연안부두로107번길 34 2동 2층 2호(항동7가)</p>
-            <p>대표전화: 010-8990-9951 | 사업자 등록번호: 855-49-00656</p>
-            <p>통신판매업 신고번호: 2023-인천중구-0378</p>
+            <p>상호명: 샘플(테스트) | 대표자명: 샘플(테스트)</p>
+            <p>사업장 주소: 00000 샘플특별시 샘플구 테스트로 00 (테스트)</p>
+            <p>대표전화: 010-0000-0000 | 사업자 등록번호: 000-00-00000</p>
+            <p>통신판매업 신고번호: 2026-샘플-0000</p>
         </div>
         <div class="border-t border-gray-200/40 pt-4 space-y-1">
             <p class="font-bold text-brandDark">무통장 결제계좌 정보</p>
-            <p id="footer-account">국민은행 64680101557728 김봉준(우모유통)</p>
+            <p id="footer-account">국민은행 000-0000-0000-00 샘플(테스트)</p>
         </div>
         <p class="text-[10px] text-gray-400 pt-2 border-t border-gray-200/40">
             Copyright © 별미집. All Rights Reserved. Hosting by Cafe24 Corp.
@@ -597,10 +601,14 @@
         
         const stepIndicator = document.getElementById("step-indicator");
         const headerTitle = document.getElementById("header-title");
+        const backBtn = document.getElementById("header-back-btn");
 
         step1.classList.add("hidden");
         step2.classList.add("hidden");
         step3.classList.add("hidden");
+
+        // 첫 화면(1단계)에서는 돌아갈 곳이 없으므로 뒤로가기 화살표를 숨긴다.
+        if (backBtn) backBtn.classList.toggle("invisible", stepNumber === 1);
 
         if (stepNumber === 1) {
             step1.classList.remove("hidden");
