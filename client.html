@@ -270,7 +270,22 @@
         </div>
     </div>
 
-    <!-- Kakao Login Overlay Modal (제거됨 - 비로그인 즉시 발주 지원) -->
+    <!-- 접속 승인제 게이트: 로그인/승인대기/차단 상태를 전체 화면으로 안내 -->
+    <div id="access-gate" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-white px-6">
+        <div class="w-full max-w-sm text-center space-y-6">
+            <div class="flex items-center justify-center">
+                <span class="font-serif text-xl font-extrabold tracking-tight text-primary">별미집</span>
+            </div>
+            <div id="gate-icon" class="w-16 h-16 rounded-full bg-neutralBg text-primary flex items-center justify-center mx-auto shadow-inner">
+                <span class="material-symbols-outlined text-3xl">lock</span>
+            </div>
+            <div class="space-y-2">
+                <h2 id="gate-title" class="font-serif text-lg font-bold text-gray-900">로그인이 필요합니다</h2>
+                <p id="gate-desc" class="text-xs text-gray-500 leading-relaxed">도매 발주는 승인된 거래처만 이용할 수 있습니다.<br>카카오 계정으로 로그인해 주세요.</p>
+            </div>
+            <div id="gate-actions" class="space-y-3"></div>
+        </div>
+    </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -300,59 +315,14 @@
         }
         await checkClosedStatus();
 
-        // 0. Buyer 권한 및 프로필 자동 로드 (비로그인 발주는 입력 허용)
-        async function checkClientAuth() {
-            if (!supabase) return;
-            try {
-                const buyerInput = document.getElementById("buyer-name");
-                const contactInput = document.getElementById("buyer-contact");
-
-                // URL에서 token 파라미터가 제공된 경우 (우선순위 1)
-                const urlParams = new URLSearchParams(window.location.search);
-                const token = urlParams.get('token');
-                if (token) {
-                    const { data: buyerData } = await supabase
-                        .from('buyers')
-                        .select('name, contact')
-                        .eq('id', token)
-                        .maybeSingle();
-                    if (buyerData) {
-                        buyerInput.value = buyerData.name;
-                        buyerInput.disabled = true;
-                        
-                        if (buyerData.contact) {
-                            const decryptedContact = BongBongCrypt.decrypt(buyerData.contact);
-                            contactInput.value = decryptedContact;
-                            contactInput.disabled = true;
-                        }
-                        return;
-                    }
-                }
-
-                // 기존 로그인 세션이 있는 경우 (우선순위 2)
-                const user = await BongBongAuth.getCurrentUser();
-                if (user) {
-                    const { data } = await supabase
-                        .from('buyers')
-                        .select('name, contact')
-                        .eq('auth_uid', user.id)
-                        .maybeSingle();
-                    if (data && data.name) {
-                        buyerInput.value = data.name;
-                        buyerInput.disabled = true;
-                        
-                        if (data.contact) {
-                            const decryptedContact = BongBongCrypt.decrypt(data.contact);
-                            contactInput.value = decryptedContact;
-                            contactInput.disabled = true;
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error("Auth check failed:", err);
-            }
+        // 0. 접속 승인제 게이트 — 카카오 로그인 + 거래처 '승인' 상태만 발주 허용
+        //    (비로그인 즉시 발주는 폐기됨. 미승인/차단은 안내 화면으로 차단)
+        const access = await resolveAccess();
+        if (access.state !== "approved") {
+            showAccessGate(access);
+            return; // 발주 UI 초기화를 중단한다
         }
-        await checkClientAuth();
+        applyApprovedBuyer(access.buyer);
 
         // 1. 캐시된 정보 복구
         const cachedName = localStorage.getItem("bb_cached_buyer_name");
@@ -795,9 +765,95 @@
 
     window.handleKakaoLogin = async function() {
         try {
-            await BongBongAuth.signInWithKakao();
+            await BongBongAuth.signInWithKakao('/client.html');
         } catch (err) {
             alert("카카오 로그인 중 오류가 발생했습니다: " + err.message);
+        }
+    };
+
+    // ── 접속 승인제 게이트 ──────────────────────────────────────────────
+    // 로그인/승인 상태를 판정한다. 반환 state: 'login' | 'pending' | 'blocked' | 'approved'
+    async function resolveAccess() {
+        if (!supabase) return { state: "approved", buyer: null }; // DB 미연결 시 게이트 무력화(개발 안전)
+        try {
+            const user = await BongBongAuth.getCurrentUser();
+            if (!user) return { state: "login" };
+
+            let buyer = null;
+            try { buyer = await BongBongStore.getMyBuyer(); } catch (e) { console.error(e); }
+
+            // 가입 직후 트리거 지연 등으로 거래처 레코드가 아직 없으면 '대기'로 취급
+            if (!buyer) return { state: "pending", user, buyer: null };
+            if (buyer.approvalStatus === "차단") return { state: "blocked", user, buyer };
+            if (buyer.approvalStatus !== "승인") return { state: "pending", user, buyer };
+            return { state: "approved", user, buyer };
+        } catch (err) {
+            console.error("접속 권한 확인 실패:", err);
+            return { state: "login" };
+        }
+    }
+
+    // 승인된 거래처: 발주자 정보를 카카오 거래처 정보로 고정(수정 불가)
+    function applyApprovedBuyer(buyer) {
+        if (!buyer) return;
+        const nameInput = document.getElementById("buyer-name");
+        const contactInput = document.getElementById("buyer-contact");
+        if (buyer.name && nameInput) {
+            nameInput.value = buyer.name;
+            nameInput.disabled = true;
+        }
+        if (buyer.contact && contactInput) {
+            contactInput.value = BongBongCrypt.decrypt(buyer.contact);
+        }
+    }
+
+    // 상태별 게이트 화면 렌더링
+    function showAccessGate(access) {
+        const gate = document.getElementById("access-gate");
+        const icon = document.getElementById("gate-icon");
+        const iconSym = icon ? icon.querySelector(".material-symbols-outlined") : null;
+        const title = document.getElementById("gate-title");
+        const desc = document.getElementById("gate-desc");
+        const actions = document.getElementById("gate-actions");
+        if (!gate) return;
+
+        const kakaoBtn = `
+            <button onclick="handleKakaoLogin()" class="w-full bg-[#FEE500] hover:brightness-95 text-[#191600] font-bold py-4 rounded-xl shadow-sm active:scale-98 transition-all flex items-center justify-center gap-2 text-sm">
+                <span class="material-symbols-outlined text-base">chat_bubble</span>
+                카카오로 로그인
+            </button>`;
+        const logoutBtn = `
+            <button onclick="handleGateSignOut()" class="w-full border border-gray-200 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-50 active:scale-98 transition-all text-xs">
+                다른 계정으로 로그인
+            </button>`;
+
+        if (access.state === "login") {
+            if (iconSym) iconSym.textContent = "lock";
+            title.textContent = "로그인이 필요합니다";
+            desc.innerHTML = "도매 발주는 승인된 거래처만 이용할 수 있습니다.<br>카카오 계정으로 로그인해 주세요.";
+            actions.innerHTML = kakaoBtn;
+        } else if (access.state === "pending") {
+            if (iconSym) iconSym.textContent = "hourglass_top";
+            title.textContent = "승인 대기 중입니다";
+            desc.innerHTML = "별미집 사장님의 거래처 승인 후 발주가 가능합니다.<br>승인되면 다시 접속해 주세요.";
+            actions.innerHTML = logoutBtn;
+        } else if (access.state === "blocked") {
+            if (icon) icon.className = "w-16 h-16 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto shadow-inner";
+            if (iconSym) iconSym.textContent = "block";
+            title.textContent = "이용이 제한된 계정입니다";
+            desc.innerHTML = "현재 발주 이용이 제한되어 있습니다.<br>자세한 사항은 별미집 사장님께 문의해 주세요.";
+            actions.innerHTML = logoutBtn;
+        }
+        gate.classList.remove("hidden");
+    }
+
+    window.handleGateSignOut = async function() {
+        try {
+            await BongBongAuth.signOut();
+        } catch (err) {
+            console.error("로그아웃 실패:", err);
+        } finally {
+            window.location.reload();
         }
     };
 </script>
