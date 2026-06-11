@@ -3166,10 +3166,10 @@
     function buyerDisplayName(b) {
         return (b.companyName && b.companyName.trim()) ? b.companyName : b.name;
     }
-    // 카카오 식별 라벨
+    // 카카오 식별 라벨 (고유 ID 숫자는 식별성이 없어 표시하지 않음 — 카카오 닉네임만)
     function kakaoIdentityLabel(b) {
         if (!b.isKakao) return "직접 등록 거래처";
-        return `카카오 ${escHtml(b.name)}${b.kakaoId ? ` · ID ${escHtml(b.kakaoId)}` : ""}`;
+        return `카카오 ${escHtml(b.name)}`;
     }
 
     async function renderBuyersTab() {
