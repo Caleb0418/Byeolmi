@@ -4,6 +4,9 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>별미집 관리자 대시보드</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="logo.png"/>
+    <link rel="apple-touch-icon" href="logo.png"/>
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com" rel="preconnect"/>
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -105,9 +108,12 @@
 
 <!-- Sidebar Menu -->
 <aside id="sidebar-menu" class="fixed inset-y-0 left-0 z-40 flex flex-col h-screen w-72 border-r border-gray-200 bg-white/95 backdrop-blur-md lg:bg-white/60 transition-transform duration-300 transform -translate-x-full lg:translate-x-0 lg:sticky lg:top-0 lg:shrink-0 lg:z-20">
-    <div class="px-6 py-8 flex flex-col gap-1">
-        <h1 class="text-xl font-bold text-primary">별미집 관리자</h1>
-        <p class="text-xs text-gray-500 font-semibold uppercase tracking-wider">도매 발주 및 정산 파이프라인</p>
+    <div class="px-6 py-8 flex items-center gap-3">
+        <img src="logo.png" alt="별미집 로고" width="48" height="48" class="w-12 h-12 shrink-0 object-contain"/>
+        <div class="flex flex-col gap-1 min-w-0">
+            <h1 class="text-xl font-bold text-primary leading-tight">별미집 관리자</h1>
+            <p class="text-[11px] text-gray-500 font-semibold uppercase tracking-wider leading-tight">도매 발주 및 정산 파이프라인</p>
+        </div>
     </div>
     <nav class="flex-1 px-4 space-y-1">
         <button onclick="switchTab('dashboard')" id="menu-dashboard" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-primary border-r-4 border-primary bg-white/80 font-bold text-left transition-all">
