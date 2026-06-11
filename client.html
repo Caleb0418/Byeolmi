@@ -797,9 +797,10 @@
             if (!user) return { state: "login" };
 
             let buyer = null;
-            try { buyer = await BongBongStore.getMyBuyer(); } catch (e) { console.error(e); }
+            // 거래처 정보가 없으면(삭제됨/트리거 누락) '대기' 상태로 자동 재생성 → 사장님이 재승인 가능
+            try { buyer = await BongBongStore.ensureMyBuyer(); } catch (e) { console.error(e); }
 
-            // 가입 직후 트리거 지연 등으로 거래처 레코드가 아직 없으면 '대기'로 취급
+            // 재생성까지 실패한 경우(네트워크 등)에도 안전하게 '대기'로 취급
             if (!buyer) return { state: "pending", user, buyer: null };
             if (buyer.approvalStatus === "차단") return { state: "blocked", user, buyer };
             if (buyer.approvalStatus !== "승인") return { state: "pending", user, buyer };

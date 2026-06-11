@@ -648,6 +648,17 @@ class BongBongStore {
         return data; // { id, name, contact, approvalStatus } | null
     }
 
+    // 로그인 사용자의 거래처를 보장(없으면 '대기' 상태로 재생성). 삭제된 거래처 재등록 동선.
+    static async ensureMyBuyer() {
+        if (!supabase) return null;
+        const { data, error } = await supabase.rpc('ensure_my_buyer');
+        if (error) {
+            console.error("Failed to ensure my buyer:", error);
+            throw new Error(error.message);
+        }
+        return data; // { id, name, contact, approvalStatus } | null
+    }
+
     // 거래처 계정 목록(카카오 닉네임/고유ID/업체명 포함) — 거래처 관리 탭용
     static async getBuyerAccounts() {
         if (!supabase) return [];
@@ -712,6 +723,25 @@ class BongBongStore {
             throw new Error(error.message);
         }
         this.dispatchStorageChange();
+    }
+
+    // 데이터 초기화 (owner 전용, 되돌릴 수 없음). 선택한 항목을 FK 안전 순서로 삭제.
+    static async resetData(opts) {
+        if (!supabase) return null;
+        const o = opts || {};
+        const { data, error } = await supabase.rpc('reset_data', {
+            p_orders: !!o.orders,
+            p_settlements: !!o.settlements,
+            p_prices: !!o.prices,
+            p_buyers: !!o.buyers,
+            p_items: !!o.items
+        });
+        if (error) {
+            console.error("Failed to reset data:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+        return data;
     }
 
     static async getBuyerIdByName(buyerName) {
