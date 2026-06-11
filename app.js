@@ -341,11 +341,19 @@ class BongBongStore {
         if (user) {
             const { data: buyerData } = await supabase
                 .from('buyers')
-                .select('id')
+                .select('id, contact')
                 .eq('auth_uid', user.id)
                 .maybeSingle();
             if (buyerData) {
                 buyerId = buyerData.id;
+                // "한 번 입력 → 이후 자동": 프로필에 연락처가 없을 때 이번 발주에 입력한 번호를 저장해
+                // 다음 발주부터 자동완성되게 한다. (기존 번호가 있으면 임의로 덮어쓰지 않음)
+                if (formattedContact && !buyerData.contact) {
+                    await supabase
+                        .from('buyers')
+                        .update({ contact: formattedContact })
+                        .eq('id', buyerId);
+                }
             }
         }
         
@@ -683,6 +691,24 @@ class BongBongStore {
             .eq('id', buyerId);
         if (error) {
             console.error("Failed to update buyer approval:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
+    // 거래처 삭제 (owner 전용). 발주/정산 이력이 있으면 FK 제약으로 막히며, 그 경우 안내 메시지를 던진다.
+    static async deleteBuyer(buyerId) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('buyers')
+            .delete()
+            .eq('id', buyerId);
+        if (error) {
+            console.error("Failed to delete buyer:", error);
+            // FK 위반(발주/정산 이력 존재) 시 사용자 친화 메시지로 변환
+            if (error.code === '23503' || /foreign key|violates/i.test(error.message)) {
+                throw new Error("발주·정산 이력이 있는 거래처는 삭제할 수 없습니다. (이력 보존)");
+            }
             throw new Error(error.message);
         }
         this.dispatchStorageChange();

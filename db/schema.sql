@@ -431,13 +431,9 @@ insert into items (id, category, name, base_price, unit, is_available) values
 ('onion', 'fresh', '빨간 양파', 15000, '망', true)
 on conflict (id) do nothing;
 
--- 5-2. 차등 도매가 할인 구간 설정
-insert into item_tiers (item_id, threshold, price) values
-('potato', 10, 18000),
-('potato', 30, 15000),
-('garlic', 20, 22000),
-('onion', 50, 12000)
-on conflict (item_id, threshold) do nothing;
+-- 5-2. (폐지) 수량별 차등 도매가(item_tiers) — 사장님 결정으로 수량 기준 단가는 사용하지 않음.
+--   가격은 '기본가' + '업체별 전용가(buyer_item_prices)'로만 결정한다.
+--   item_tiers 테이블/RPC는 하위호환을 위해 남겨두되 시드는 넣지 않는다(빈 상태 = 기본가 적용).
 
 -- 5-3. 샘플 구매자 추가
 insert into buyers (id, name, contact, address, approval_status) values
