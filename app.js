@@ -341,11 +341,19 @@ class BongBongStore {
         if (user) {
             const { data: buyerData } = await supabase
                 .from('buyers')
-                .select('id')
+                .select('id, contact')
                 .eq('auth_uid', user.id)
                 .maybeSingle();
             if (buyerData) {
                 buyerId = buyerData.id;
+                // "한 번 입력 → 이후 자동": 프로필에 연락처가 없을 때 이번 발주에 입력한 번호를 저장해
+                // 다음 발주부터 자동완성되게 한다. (기존 번호가 있으면 임의로 덮어쓰지 않음)
+                if (formattedContact && !buyerData.contact) {
+                    await supabase
+                        .from('buyers')
+                        .update({ contact: formattedContact })
+                        .eq('id', buyerId);
+                }
             }
         }
         
