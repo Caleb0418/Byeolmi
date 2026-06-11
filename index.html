@@ -981,6 +981,7 @@
                 <div class="flex gap-2">
                     <button type="button" id="settings-chip-owner" onclick="switchSettingsPane('owner')" class="px-4 py-2 rounded-full text-xs font-bold border transition-all">사장님 계정</button>
                     <button type="button" id="settings-chip-account" onclick="switchSettingsPane('account')" class="px-4 py-2 rounded-full text-xs font-bold border transition-all">결제 계좌·상호</button>
+                    <button type="button" id="settings-chip-reset" onclick="switchSettingsPane('reset')" class="px-4 py-2 rounded-full text-xs font-bold border transition-all">초기화</button>
                 </div>
 
                 <!-- Pane: 사장님 계정 -->
@@ -1039,6 +1040,34 @@
                         </div>
                         <button type="submit" class="w-full bg-primary text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-opacity-90">계좌·상호 저장</button>
                     </form>
+                </div>
+
+                <!-- Pane: 초기화 -->
+                <div id="settings-pane-reset" class="space-y-4 hidden">
+                    <div class="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700 leading-relaxed">
+                        ⚠️ 선택한 데이터를 <b>영구 삭제</b>합니다. 되돌릴 수 없으니 신중히 사용하세요.
+                    </div>
+
+                    <label class="flex items-center gap-2 font-bold text-sm text-gray-800 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5 cursor-pointer">
+                        <input type="checkbox" id="reset-all" onchange="toggleResetAll()" class="rounded border-gray-300 text-red-600 focus:ring-red-500">
+                        전체 데이터 초기화
+                    </label>
+
+                    <div class="space-y-2 pl-1">
+                        <p class="text-[11px] font-bold text-gray-400 uppercase">또는 항목 선택</p>
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" class="reset-item rounded border-gray-300 text-red-600 focus:ring-red-500" value="orders"> 발주 내역</label>
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" class="reset-item rounded border-gray-300 text-red-600 focus:ring-red-500" value="settlements"> 정산 내역</label>
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" class="reset-item rounded border-gray-300 text-red-600 focus:ring-red-500" value="prices"> 업체 전용 단가</label>
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" class="reset-item rounded border-gray-300 text-red-600 focus:ring-red-500" value="buyers"> 거래처 <span class="text-[11px] text-gray-400">(발주·정산·전용가 함께 삭제)</span></label>
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"><input type="checkbox" class="reset-item rounded border-gray-300 text-red-600 focus:ring-red-500" value="items"> 품목 <span class="text-[11px] text-gray-400">(발주·전용가 함께 삭제)</span></label>
+                    </div>
+
+                    <p class="text-[11px] text-gray-400">※ 사장님 계정·계좌 설정은 삭제되지 않습니다.</p>
+
+                    <button type="button" onclick="executeReset()" class="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl flex items-center justify-center gap-1.5">
+                        <span class="material-symbols-outlined text-base">delete_forever</span>
+                        선택 항목 초기화
+                    </button>
                 </div>
             </div>
         </div>
@@ -1737,18 +1766,58 @@
 
         // 시스템 설정 모달의 칩 전환 — 선택한 칸만 표시
         window.switchSettingsPane = function(pane) {
-            const paneOwner = document.getElementById("settings-pane-owner");
-            const paneAccount = document.getElementById("settings-pane-account");
-            const chipOwner = document.getElementById("settings-chip-owner");
-            const chipAccount = document.getElementById("settings-chip-account");
-            if (!paneOwner || !paneAccount) return;
+            const PANES = ['owner', 'account', 'reset'];
             const ACTIVE = "px-4 py-2 rounded-full text-xs font-bold border border-transparent bg-primary text-white transition-all";
             const IDLE = "px-4 py-2 rounded-full text-xs font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all";
-            const ownerActive = pane === 'owner';
-            paneOwner.classList.toggle("hidden", !ownerActive);
-            paneAccount.classList.toggle("hidden", ownerActive);
-            if (chipOwner) chipOwner.className = ownerActive ? ACTIVE : IDLE;
-            if (chipAccount) chipAccount.className = ownerActive ? IDLE : ACTIVE;
+            PANES.forEach(p => {
+                const paneEl = document.getElementById('settings-pane-' + p);
+                const chipEl = document.getElementById('settings-chip-' + p);
+                if (paneEl) paneEl.classList.toggle('hidden', p !== pane);
+                if (chipEl) chipEl.className = (p === pane) ? ACTIVE : IDLE;
+            });
+        };
+
+        // '전체 데이터 초기화' 체크 → 항목 전체 선택/해제
+        window.toggleResetAll = function() {
+            const all = document.getElementById('reset-all').checked;
+            document.querySelectorAll('.reset-item').forEach(cb => { cb.checked = all; });
+        };
+
+        const RESET_LABELS = { orders: '발주 내역', settlements: '정산 내역', prices: '업체 전용 단가', buyers: '거래처', items: '품목' };
+
+        // 선택 항목 초기화 실행 (2중 확인)
+        window.executeReset = async function() {
+            const selected = [...document.querySelectorAll('.reset-item:checked')].map(cb => cb.value);
+            if (selected.length === 0) {
+                window.BongBongUI && window.BongBongUI.toast("초기화할 항목을 선택해 주세요.", 'info');
+                return;
+            }
+            const labelList = selected.map(v => `• ${RESET_LABELS[v]}`).join('\n');
+            // 1차 확인
+            if (!confirm(`다음 데이터를 영구 삭제합니다:\n\n${labelList}\n\n계속하시겠습니까?`)) return;
+            // 2차 확인
+            if (!confirm("정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) return;
+
+            try {
+                const opts = {
+                    orders: selected.includes('orders'),
+                    settlements: selected.includes('settlements'),
+                    prices: selected.includes('prices'),
+                    buyers: selected.includes('buyers'),
+                    items: selected.includes('items')
+                };
+                await BongBongStore.resetData(opts);
+                window.BongBongUI && window.BongBongUI.toast("선택한 데이터를 초기화했습니다.", 'success');
+                // 체크박스 리셋
+                document.getElementById('reset-all').checked = false;
+                document.querySelectorAll('.reset-item').forEach(cb => { cb.checked = false; });
+                closeModal('system-settings-modal');
+                await renderAdminDashboard();
+                await refreshPendingApprovalBadge();
+            } catch (err) {
+                console.error("Reset failed:", err);
+                alert("초기화에 실패했습니다: " + (err.message || "알 수 없는 오류"));
+            }
         };
 
         // (P3-3) 계좌·상호 설정을 폼에 채워 넣기

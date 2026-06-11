@@ -409,6 +409,45 @@ $$;
 
 grant execute on function public.ensure_my_buyer() to authenticated;
 
+-- 4-2c. 데이터 초기화 RPC (시스템 설정 '초기화' 탭) — FK 안전 순서로 선택 항목 삭제
+-- (마이그레이션 20260611000005_reset_data.sql 와 동일). 사장님 계정/계좌 설정은 건드리지 않음.
+create or replace function public.reset_data(
+  p_orders      boolean default false,
+  p_settlements boolean default false,
+  p_prices      boolean default false,
+  p_buyers      boolean default false,
+  p_items       boolean default false
+)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  del_settlements boolean := p_settlements or p_buyers;
+  del_orders      boolean := p_orders or p_buyers or p_items;
+  del_prices      boolean := p_prices or p_buyers or p_items;
+  del_tiers       boolean := p_items;
+  del_buyers      boolean := p_buyers;
+  del_items       boolean := p_items;
+begin
+  if del_settlements then delete from settlements; end if;
+  if del_orders      then delete from orders; end if;
+  if del_prices      then delete from buyer_item_prices; end if;
+  if del_tiers       then delete from item_tiers; end if;
+  if del_buyers      then delete from buyers; end if;
+  if del_items       then delete from items; end if;
+
+  return json_build_object(
+    'settlements', del_settlements, 'orders', del_orders,
+    'prices', del_prices, 'tiers', del_tiers,
+    'buyers', del_buyers, 'items', del_items
+  );
+end;
+$$;
+
+grant execute on function public.reset_data(boolean, boolean, boolean, boolean, boolean) to anon, authenticated;
+
 -- 4-2b. 거래처 계정 목록 RPC (카카오 식별정보 포함) — 거래처 관리 탭에서 사용
 -- (마이그레이션 20260611000003_buyer_company_and_accounts.sql 와 동일)
 create or replace function public.get_buyer_accounts()

@@ -725,6 +725,25 @@ class BongBongStore {
         this.dispatchStorageChange();
     }
 
+    // 데이터 초기화 (owner 전용, 되돌릴 수 없음). 선택한 항목을 FK 안전 순서로 삭제.
+    static async resetData(opts) {
+        if (!supabase) return null;
+        const o = opts || {};
+        const { data, error } = await supabase.rpc('reset_data', {
+            p_orders: !!o.orders,
+            p_settlements: !!o.settlements,
+            p_prices: !!o.prices,
+            p_buyers: !!o.buyers,
+            p_items: !!o.items
+        });
+        if (error) {
+            console.error("Failed to reset data:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+        return data;
+    }
+
     static async getBuyerIdByName(buyerName) {
         if (!supabase) return null;
         const { data } = await supabase
