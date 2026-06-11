@@ -59,6 +59,22 @@ suite.test("item이 null이면 0 반환", () => {
     assert.strictEqual(BongBongCalculator.getWholesaleUnitPrice(null, 10), 0);
 });
 
+// --- getWholesaleUnitPrice: 업체 전용가 override (수량할인 대체) ---
+
+suite.test("전용가가 주어지면 수량 티어를 무시하고 전용가 고정 적용", () => {
+    // potato 는 10개↑ 18000, 30개↑ 15000 티어를 가지지만 전용가 13000이 이를 대체
+    assert.strictEqual(BongBongCalculator.getWholesaleUnitPrice(potato, 5, 13000), 13000);
+    assert.strictEqual(BongBongCalculator.getWholesaleUnitPrice(potato, 50, 13000), 13000);
+});
+
+suite.test("전용가 0원도 유효하게 적용(무상/샘플 단가)", () => {
+    assert.strictEqual(BongBongCalculator.getWholesaleUnitPrice(potato, 12, 0), 0);
+});
+
+suite.test("전용가가 null이면 기존 티어 로직 유지", () => {
+    assert.strictEqual(BongBongCalculator.getWholesaleUnitPrice(potato, 12, null), 18000);
+});
+
 // --- getTierBenefitInfo ---
 
 suite.test("첫 구간 미만: 절약 0, 다음 구간 정보 정확", () => {

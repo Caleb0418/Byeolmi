@@ -23,10 +23,12 @@ create table item_tiers (
 -- 구매자 테이블
 create table buyers (
   id         uuid primary key default gen_random_uuid(),
-  auth_uid   uuid,                                    -- Phase 2에서 auth.users(id) 연결용
+  auth_uid   uuid,                                    -- 카카오 로그인(auth.users.id) 연결용
   name       text not null,                           -- '박민지 (맘공구)'
-  contact    text,                                    -- 암호화 대상(Phase 4)
-  address    text,                                    -- 암호화 대상(Phase 4)
+  contact    text,                                    -- 평문 저장(RLS로 보호)
+  address    text,
+  approval_status text not null default '대기'         -- 접속 승인 상태 (카카오 로그인 필수 승인제)
+                  check (approval_status in ('대기', '승인', '차단')),
   created_at timestamptz not null default now()
 );
 
@@ -127,8 +129,16 @@ create policy "Allow all to buyers for owner" on buyers
 create policy "Allow select orders" on orders
   for select using (buyer_id in (select id from buyers where auth_uid = auth.uid()) or get_my_role() = 'owner');
 
-create policy "Allow insert orders for authenticated" on orders
-  for insert with check (auth.role() = 'authenticated');
+-- 발주는 로그인 + 본인 소유의 '승인'된 거래처만 가능 (접속 승인제). owner 는 아래 for all 정책으로 삽입.
+create policy "Allow insert orders for approved buyer" on orders
+  for insert with check (
+    exists (
+      select 1 from public.buyers b
+      where b.id = orders.buyer_id
+        and b.auth_uid = auth.uid()
+        and b.approval_status = '승인'
+    )
+  );
 
 create policy "Allow update/delete orders for owner" on orders
   for all using (get_my_role() = 'owner');
@@ -182,12 +192,13 @@ create or replace trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 -- 이를 통해 구매자는 item_tiers 테이블을 직접 읽지 않고도 안전하게 단가 계산 결과를 얻을 수 있습니다.
 create or replace function get_buyer_tier_benefit(
-  p_item_id text,
-  p_qty integer
+  p_item_id  text,
+  p_qty      integer,
+  p_buyer_id uuid default null    -- 지정 시(또는 로그인 추론 시) 전용가 우선 적용
 )
 returns json
 language plpgsql
-security definer -- 정의자 권한으로 실행하여 RLS가 걸린 item_tiers를 읽을 수 있음
+security definer -- 정의자 권한으로 실행하여 RLS가 걸린 item_tiers / buyer_item_prices 를 읽을 수 있음
 as $$
 declare
   v_base_price integer;
@@ -204,7 +215,20 @@ declare
   v_next_savings_per_unit integer := 0;
   v_has_tiers boolean := false;
   v_item_exists boolean := false;
+  v_buyer_id uuid;
+  v_custom_price integer;
 begin
+  -- 0. 유효 거래처 결정 (보안: owner 가 아니면 타 거래처 id 무시하고 본인으로 한정)
+  if p_buyer_id is not null then
+    if get_my_role() = 'owner'
+       or exists (select 1 from buyers where id = p_buyer_id and auth_uid = auth.uid()) then
+      v_buyer_id := p_buyer_id;
+    end if;
+  end if;
+  if v_buyer_id is null then
+    select id into v_buyer_id from buyers where auth_uid = auth.uid() limit 1;
+  end if;
+
   -- 1. 기본 품목 정보 조회
   select base_price, unit, true
   into v_base_price, v_unit, v_item_exists
@@ -213,6 +237,33 @@ begin
 
   if not v_item_exists then
     return null;
+  end if;
+
+  -- 1-5. 전용가 우선: 전용가가 있으면 수량 티어를 무시하고 고정 적용
+  if v_buyer_id is not null then
+    select price into v_custom_price
+      from buyer_item_prices
+     where buyer_id = v_buyer_id and item_id = p_item_id;
+  end if;
+
+  if v_custom_price is not null then
+    v_current_unit_price := v_custom_price;
+    v_current_total := p_qty * v_current_unit_price;
+    v_base_total := p_qty * v_base_price;
+    v_saved_amount := v_base_total - v_current_total;
+    return json_build_object(
+      'basePrice', v_base_price,
+      'currentUnitPrice', v_current_unit_price,
+      'currentTotal', v_current_total,
+      'savedAmount', v_saved_amount,
+      'currentTier', null,
+      'nextTier', null,
+      'remainingQty', 0,
+      'nextPrice', 0,
+      'nextSavingsPerUnit', 0,
+      'hasTiers', false,
+      'isCustomPrice', true
+    );
   end if;
 
   -- 2. Tiers 존재 여부 체크
@@ -264,65 +315,71 @@ begin
     'remainingQty', v_remaining_qty,
     'nextPrice', v_next_price,
     'nextSavingsPerUnit', v_next_savings_per_unit,
-    'hasTiers', v_has_tiers
+    'hasTiers', v_has_tiers,
+    'isCustomPrice', false
   );
 end;
 $$;
 
+grant execute on function get_buyer_tier_benefit(text, integer, uuid) to anon, authenticated;
 
--- 4-2. 비로그인 즉시 발주용 진입점 (SECURITY DEFINER RPC)
--- orders/buyers 테이블 SELECT/INSERT 정책은 잠근 채로, 검증된 이 함수만 anon 에게 노출한다.
--- (마이그레이션 20260604000001_anonymous_order_rpc.sql 와 동일)
-create or replace function public.submit_anonymous_order(
-  p_buyer_name text,
-  p_contact    text,
-  p_item_id    text,
-  p_qty        integer
-)
-returns bigint
+
+-- 4-2. 현재 로그인 사용자의 거래처 정보(승인 상태 포함) 조회 RPC
+-- (마이그레이션 20260611000001_buyer_approval.sql 와 동일) — client.html 접속 게이트에서 사용.
+create or replace function public.get_my_buyer()
+returns json
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_buyer_id uuid;
-  v_order_id bigint;
-  v_name     text := nullif(trim(p_buyer_name), '');
-  v_contact  text := nullif(trim(coalesce(p_contact, '')), '');
+  v_id      uuid;
+  v_name    text;
+  v_contact text;
+  v_status  text;
 begin
-  if v_name is null then
-    raise exception '거래처명(대표자/업체명)이 필요합니다.';
+  if auth.uid() is null then
+    return null;
   end if;
-  if p_qty is null or p_qty <= 0 then
-    raise exception '발주 수량은 1 이상이어야 합니다.';
+  select id, name, contact, approval_status
+    into v_id, v_name, v_contact, v_status
+    from buyers
+   where auth_uid = auth.uid()
+   limit 1;
+  if v_id is null then
+    return null;
   end if;
-  if not exists (select 1 from items where id = p_item_id and is_available) then
-    raise exception '판매 중인 품목이 아닙니다.';
-  end if;
-
-  select id into v_buyer_id from buyers where name = v_name limit 1;
-  if v_buyer_id is null then
-    insert into buyers (name, contact) values (v_name, v_contact)
-    returning id into v_buyer_id;
-  elsif v_contact is not null then
-    update buyers
-       set contact = v_contact
-     where id = v_buyer_id
-       and (contact is null or contact = '');
-  end if;
-
-  insert into orders (buyer_id, buyer_name, item_id, qty, status, time)
-  values (
-    v_buyer_id, v_name, p_item_id, p_qty, '대기',
-    to_char(now() at time zone 'Asia/Seoul', 'HH24:MI')
-  )
-  returning id into v_order_id;
-
-  return v_order_id;
+  return json_build_object(
+    'id', v_id,
+    'name', v_name,
+    'contact', v_contact,
+    'approvalStatus', v_status
+  );
 end;
 $$;
 
-grant execute on function public.submit_anonymous_order(text, text, text, integer) to anon, authenticated;
+grant execute on function public.get_my_buyer() to authenticated;
+
+-- 4-3. 거래처별 품목 전용 단가 (수량 할인 대체)
+-- (마이그레이션 20260611000002_buyer_item_prices.sql 와 동일)
+create table buyer_item_prices (
+  id         bigint generated always as identity primary key,
+  buyer_id   uuid not null references buyers(id) on delete cascade,
+  item_id    text not null references items(id) on delete cascade,
+  price      integer not null check (price >= 0),
+  created_at timestamptz not null default now(),
+  unique (buyer_id, item_id)
+);
+
+alter table buyer_item_prices enable row level security;
+
+create policy "Allow all buyer_item_prices for owner" on buyer_item_prices
+  for all using (get_my_role() = 'owner');
+
+create policy "Allow select own buyer_item_prices" on buyer_item_prices
+  for select using (
+    buyer_id in (select id from buyers where auth_uid = auth.uid())
+  );
 
 
 -- 5. 테스트용 시드(Seed) 데이터 주입
@@ -347,10 +404,10 @@ insert into item_tiers (item_id, threshold, price) values
 on conflict (item_id, threshold) do nothing;
 
 -- 5-3. 샘플 구매자 추가
-insert into buyers (id, name, contact, address) values
-('a0e829c6-6a7e-4b46-a7c5-ae4de4060ef1', '박민지 (맘공구)', '010-1234-5678', '인천 부평구'),
-('b0e829c6-6a7e-4b46-a7c5-ae4de4060ef2', '최유진 (마트)', '010-8765-4321', '서울 강서구'),
-('c0e829c6-6a7e-4b46-a7c5-ae4de4060ef3', '이정재 (대형유통)', '010-5555-5555', '경기 성남시')
+insert into buyers (id, name, contact, address, approval_status) values
+('a0e829c6-6a7e-4b46-a7c5-ae4de4060ef1', '박민지 (맘공구)', '010-1234-5678', '인천 부평구', '승인'),
+('b0e829c6-6a7e-4b46-a7c5-ae4de4060ef2', '최유진 (마트)', '010-8765-4321', '서울 강서구', '승인'),
+('c0e829c6-6a7e-4b46-a7c5-ae4de4060ef3', '이정재 (대형유통)', '010-5555-5555', '경기 성남시', '차단')
 on conflict (id) do nothing;
 
 -- 5-4. 실시간 현황 시각화를 위한 주문 추가

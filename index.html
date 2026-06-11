@@ -850,6 +850,16 @@
                         </table>
                     </div>
                 </div>
+                <!-- 업체 전용 단가 설정 (수량 할인 대체) -->
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm text-indigo-500">sell</span> 업체 전용 단가 설정
+                    </h4>
+                    <p class="text-[11px] text-gray-400 leading-relaxed">전용가를 입력하면 수량 할인 대신 <b>해당 단가가 수량과 무관하게 고정 적용</b>됩니다. 비워두면 기존 수량 기준 단가가 적용됩니다.</p>
+                    <div id="modal-buyer-prices-list" class="space-y-2">
+                        <!-- Dynamic rendering -->
+                    </div>
+                </div>
                 <div class="pt-4 border-t border-gray-100 flex justify-end gap-3">
                     <button type="button" onclick="closeModal('buyer-settlements-modal')" class="px-4 py-2 border rounded-xl text-xs font-semibold text-gray-500 hover:bg-gray-50">닫기</button>
                     <button type="button" id="modal-settlements-all-clear-btn" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1">
@@ -1813,9 +1823,23 @@
 
             data.buyers.forEach(buyer => {
                 const isNormal = buyer.status === "정상";
-                const selectColor = isNormal 
-                    ? "bg-green-50 text-green-700 border-green-200" 
+                const selectColor = isNormal
+                    ? "bg-green-50 text-green-700 border-green-200"
                     : "bg-red-50 text-red-700 border-red-200";
+
+                // 접속 승인 상태 컨트롤 (buyers 테이블 레코드가 있는 거래처만)
+                const appr = buyer.approvalStatus;
+                const apprColor = appr === "승인"
+                    ? "bg-green-50 text-green-700 border-green-200"
+                    : appr === "차단"
+                    ? "bg-red-50 text-red-700 border-red-200"
+                    : "bg-yellow-50 text-yellow-700 border-yellow-200";
+                const approvalControl = buyer.id ? `
+                    <select onchange="changeBuyerApproval('${buyer.id}', this.value)" title="접속 승인 상태" class="mt-1.5 block text-[10px] font-bold rounded-md px-2 py-0.5 border outline-none focus:ring-0 cursor-pointer appearance-none ${apprColor}">
+                        <option value="승인" ${appr === '승인' ? 'selected' : ''}>접속 승인</option>
+                        <option value="대기" ${appr === '대기' ? 'selected' : ''}>승인 대기</option>
+                        <option value="차단" ${appr === '차단' ? 'selected' : ''}>접속 차단</option>
+                    </select>` : '';
 
                 const tr = `
                     <tr class="hover:bg-gray-50 transition-colors h-14">
@@ -1823,6 +1847,7 @@
                             <button onclick="openBuyerSettlementsModal('${buyer.name}')" class="hover:underline hover:text-indigo-600 transition-colors text-left font-bold focus:outline-none">
                                 ${buyer.name}
                             </button>
+                            ${approvalControl}
                         </td>
                         <td data-label="최근 발주 일자" class="px-6 py-4 text-gray-650 text-xs font-semibold">${buyer.lastOrderDate}</td>
                         <td data-label="미수 건수" class="px-6 py-4 font-semibold text-xs ${buyer.unpaidCount > 0 ? 'text-red-500 font-bold' : 'text-gray-500'}">${buyer.unpaidCount} 건</td>
@@ -1860,6 +1885,20 @@
             window.BongBongUI && window.BongBongUI.toast("분석 데이터를 불러오지 못했습니다.");
         }
     }
+
+    // 거래처 접속 승인 상태 변경 (승인/대기/차단)
+    window.changeBuyerApproval = async function(buyerId, status) {
+        try {
+            await BongBongStore.updateBuyerApproval(buyerId, status);
+            const label = status === "승인" ? "접속을 승인" : status === "차단" ? "접속을 차단" : "승인 대기로 변경";
+            window.BongBongUI && window.BongBongUI.toast(`거래처 ${label}했습니다.`, status === "차단" ? 'info' : 'success');
+            await renderAnalyticsBoard();
+        } catch (err) {
+            console.error("Failed to change buyer approval:", err);
+            alert("접속 권한 변경에 실패했습니다: " + (err.message || "알 수 없는 오류"));
+            await renderAnalyticsBoard();
+        }
+    };
 
     window.changeBuyerStatus = async function(buyerName, selectValue) {
         if (selectValue === "미수금_입력") {
@@ -2977,6 +3016,7 @@
             }
             
             await renderFailedSettlements(buyerName);
+            await renderBuyerItemPrices(buyerName);
 
             document.getElementById("buyer-settlements-modal").classList.remove("hidden");
         } catch (err) {
@@ -3045,6 +3085,83 @@
             await renderAnalyticsBoard();
         } catch (err) {
             alert("상태 수정에 실패했습니다.");
+        }
+    };
+
+    // ── 업체 전용 단가 설정 UI ─────────────────────────────────────────
+    async function renderBuyerItemPrices(buyerName) {
+        const list = document.getElementById("modal-buyer-prices-list");
+        if (!list) return;
+        try {
+            const buyerId = await BongBongStore.getBuyerIdByName(buyerName);
+            if (!buyerId) {
+                list.innerHTML = `<p class="text-[11px] text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">이 거래처는 전용가를 설정할 수 없습니다(미등록 임시 거래처).</p>`;
+                return;
+            }
+            const items = await BongBongStore.getItems();
+            const prices = await BongBongStore.getBuyerItemPrices(buyerId);
+
+            if (!items.length) {
+                list.innerHTML = `<p class="text-[11px] text-gray-400">등록된 품목이 없습니다.</p>`;
+                return;
+            }
+
+            list.innerHTML = items.map(item => {
+                const custom = prices[item.id];
+                const hasCustom = custom != null;
+                const valueAttr = hasCustom ? `value="${custom}"` : "";
+                const badge = hasCustom
+                    ? `<span class="text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5">전용가 적용중</span>`
+                    : `<span class="text-[9px] font-bold text-gray-400 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">기본/수량단가</span>`;
+                return `
+                    <div class="flex items-center gap-2 border border-gray-100 rounded-xl px-3 py-2">
+                        <div class="min-w-0 flex-1">
+                            <div class="text-xs font-bold text-gray-800 truncate">${item.name} ${badge}</div>
+                            <div class="text-[10px] text-gray-400">기본가 ₩${item.basePrice.toLocaleString()} / ${item.unit}</div>
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <span class="text-[10px] text-gray-400">₩</span>
+                            <input type="number" min="0" id="bp-input-${item.id}" ${valueAttr} placeholder="전용가"
+                                class="w-20 text-right text-xs font-bold rounded-lg border-gray-200 py-1 px-2 focus:border-indigo-500 focus:ring-indigo-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                            <button type="button" onclick="saveBuyerItemPrice('${buyerId}', '${item.id}', '${buyerName}')" class="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold">적용</button>
+                            ${hasCustom ? `<button type="button" onclick="clearBuyerItemPrice('${buyerId}', '${item.id}', '${buyerName}')" class="px-2 py-1 border border-gray-200 text-gray-500 hover:bg-gray-50 rounded-lg text-[10px] font-bold">해제</button>` : ""}
+                        </div>
+                    </div>
+                `;
+            }).join("");
+        } catch (err) {
+            console.error("Failed to render buyer item prices:", err);
+            list.innerHTML = `<p class="text-[11px] text-red-500">전용가 정보를 불러오지 못했습니다.</p>`;
+        }
+    }
+
+    window.saveBuyerItemPrice = async function(buyerId, itemId, buyerName) {
+        const input = document.getElementById(`bp-input-${itemId}`);
+        const raw = input ? input.value.trim() : "";
+        if (raw === "") {
+            // 빈 값으로 적용 = 전용가 해제로 처리
+            return clearBuyerItemPrice(buyerId, itemId, buyerName);
+        }
+        try {
+            await BongBongStore.setBuyerItemPrice(buyerId, itemId, raw);
+            window.BongBongUI && window.BongBongUI.toast("전용가를 적용했습니다.", 'success');
+            await renderBuyerItemPrices(buyerName);
+            await renderAnalyticsBoard();
+        } catch (err) {
+            console.error("Failed to save buyer item price:", err);
+            alert("전용가 적용에 실패했습니다: " + (err.message || "알 수 없는 오류"));
+        }
+    };
+
+    window.clearBuyerItemPrice = async function(buyerId, itemId, buyerName) {
+        try {
+            await BongBongStore.deleteBuyerItemPrice(buyerId, itemId);
+            window.BongBongUI && window.BongBongUI.toast("전용가를 해제했습니다. 수량 단가로 복귀합니다.", 'info');
+            await renderBuyerItemPrices(buyerName);
+            await renderAnalyticsBoard();
+        } catch (err) {
+            console.error("Failed to clear buyer item price:", err);
+            alert("전용가 해제에 실패했습니다: " + (err.message || "알 수 없는 오류"));
         }
     };
 </script>

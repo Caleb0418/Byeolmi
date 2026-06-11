@@ -331,35 +331,11 @@ class BongBongStore {
         if (!supabase) throw new Error("Database not connected");
 
         // RLS 및 데이터 관계 매핑을 위한 buyer_id 조회 또는 생성
+        // 접속 승인제 전환(20260611000001): 비로그인 발주는 폐기됨.
+        //   - 구매자 자가 발주: client.html 접속 게이트가 로그인+승인을 강제하므로 여기 도달 시 user 존재.
+        //   - 사장님 수동 발주: owner 권한 RLS 로 임의 거래처에 대해 삽입 가능(이름 기준 조회/생성).
         let buyerId = null;
         const { data: { user } } = await supabase.auth.getUser();
-
-        // 비로그인 발주: buyers/orders 테이블 INSERT 정책이 인증을 요구하므로
-        // 검증된 SECURITY DEFINER RPC(submit_anonymous_order)를 단일 진입점으로 경유한다.
-        // (마이그레이션 20260604000001_anonymous_order_rpc.sql)
-        if (!user) {
-            const { data: orderId, error: rpcError } = await supabase.rpc('submit_anonymous_order', {
-                p_buyer_name: buyerName,
-                p_contact: formattedContact || null,
-                p_item_id: itemId,
-                p_qty: parsedQty
-            });
-            if (rpcError) {
-                console.error("Failed to add order (anonymous):", rpcError);
-                throw new Error(rpcError.message);
-            }
-            this.dispatchStorageChange();
-            const now = new Date();
-            const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-            return {
-                id: orderId,
-                buyerName,
-                itemId,
-                qty: parsedQty,
-                time: timeStr,
-                status: "대기"
-            };
-        }
 
         // 1. 로그인된 상태라면 auth_uid 기반으로 우선 조회
         if (user) {
@@ -510,11 +486,13 @@ class BongBongStore {
 
             const orders = await this.getOrders();
             const items = await this.getItems();
+            const priceMap = await this.getBuyerItemPriceMap();
 
             const buyerStats = {};
             orders.forEach(order => {
                 const item = items.find(i => i.id === order.itemId);
-                const price = BongBongCalculator.getWholesaleUnitPrice(item, order.qty);
+                const override = priceMap[order.buyerName] ? priceMap[order.buyerName][order.itemId] : null;
+                const price = BongBongCalculator.getWholesaleUnitPrice(item, order.qty, override);
                 const subtotal = order.qty * price;
 
                 if (!buyerStats[order.buyerName]) {
@@ -549,6 +527,8 @@ class BongBongStore {
                 }
 
                 return {
+                    id: buyer.id,
+                    approvalStatus: buyer.approval_status || '대기',
                     name: buyer.name,
                     lastOrderDate: stats.lastOrderDate || "발주 이력 없음",
                     unpaidCount: stats.unpaidCount,
@@ -568,6 +548,8 @@ class BongBongStore {
                     }
 
                     resultBuyers.push({
+                        id: null,
+                        approvalStatus: null,
                         name: name,
                         lastOrderDate: stats.lastOrderDate || "발주 이력 없음",
                         unpaidCount: stats.unpaidCount,
@@ -633,15 +615,123 @@ class BongBongStore {
         }
     }
 
-    static async getBuyerTierBenefit(itemId, qty) {
+    static async getBuyerTierBenefit(itemId, qty, buyerId = null) {
         if (!supabase) return null;
+        const params = { p_item_id: itemId, p_qty: qty };
+        if (buyerId) params.p_buyer_id = buyerId;
         const { data, error } = await supabase
-            .rpc('get_buyer_tier_benefit', { p_item_id: itemId, p_qty: qty });
+            .rpc('get_buyer_tier_benefit', params);
         if (error) {
             console.error("Failed to get buyer tier benefit:", error);
             throw new Error(error.message);
         }
         return data;
+    }
+
+    // ── 접속 승인제 (거래처 승인 상태 관리) ─────────────────────────────
+    // 현재 로그인 사용자의 거래처 정보(승인 상태 포함) 조회 — client.html 접속 게이트용
+    static async getMyBuyer() {
+        if (!supabase) return null;
+        const { data, error } = await supabase.rpc('get_my_buyer');
+        if (error) {
+            console.error("Failed to get my buyer:", error);
+            throw new Error(error.message);
+        }
+        return data; // { id, name, contact, approvalStatus } | null
+    }
+
+    // 거래처 승인 상태 변경 (owner 전용) — '대기' | '승인' | '차단'
+    static async updateBuyerApproval(buyerId, status) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('buyers')
+            .update({ approval_status: status })
+            .eq('id', buyerId);
+        if (error) {
+            console.error("Failed to update buyer approval:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
+    static async getBuyerIdByName(buyerName) {
+        if (!supabase) return null;
+        const { data } = await supabase
+            .from('buyers')
+            .select('id')
+            .eq('name', buyerName)
+            .maybeSingle();
+        return data ? data.id : null;
+    }
+
+    // ── 업체별 전용 단가 ───────────────────────────────────────────────
+    // 특정 거래처의 품목별 전용가 조회 → { [itemId]: price }
+    static async getBuyerItemPrices(buyerId) {
+        if (!supabase || !buyerId) return {};
+        const { data, error } = await supabase
+            .from('buyer_item_prices')
+            .select('item_id, price')
+            .eq('buyer_id', buyerId);
+        if (error) {
+            console.error("Failed to fetch buyer item prices:", error);
+            throw new Error(error.message);
+        }
+        const map = {};
+        (data || []).forEach(row => { map[row.item_id] = row.price; });
+        return map;
+    }
+
+    // 전 거래처 전용가를 거래처명 기준 맵으로 → { [buyerName]: { [itemId]: price } }
+    // (owner 대시보드의 매출/정산 계산에서 전용가를 반영하기 위함)
+    static async getBuyerItemPriceMap() {
+        if (!supabase) return {};
+        try {
+            const { data, error } = await supabase
+                .from('buyer_item_prices')
+                .select('item_id, price, buyers(name)');
+            if (error) throw error;
+            const map = {};
+            (data || []).forEach(row => {
+                const name = row.buyers ? row.buyers.name : null;
+                if (!name) return;
+                if (!map[name]) map[name] = {};
+                map[name][row.item_id] = row.price;
+            });
+            return map;
+        } catch (err) {
+            console.error("Failed to build buyer item price map:", err);
+            return {};
+        }
+    }
+
+    static async setBuyerItemPrice(buyerId, itemId, price) {
+        if (!supabase) return;
+        const parsed = parseInt(price, 10);
+        if (!buyerId || !itemId || isNaN(parsed) || parsed < 0) {
+            throw new Error("전용가는 0원 이상의 숫자여야 합니다.");
+        }
+        const { error } = await supabase
+            .from('buyer_item_prices')
+            .upsert({ buyer_id: buyerId, item_id: itemId, price: parsed }, { onConflict: 'buyer_id,item_id' });
+        if (error) {
+            console.error("Failed to set buyer item price:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
+    static async deleteBuyerItemPrice(buyerId, itemId) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('buyer_item_prices')
+            .delete()
+            .eq('buyer_id', buyerId)
+            .eq('item_id', itemId);
+        if (error) {
+            console.error("Failed to delete buyer item price:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
     }
 
     static async getApprovedOwners() {
@@ -923,12 +1013,14 @@ class BongBongStore {
         try {
             const orders = await this.getOrders();
             const items = await this.getItems();
-            
+            const buyerPrices = await this.getBuyerItemPrices(await this.getBuyerIdByName(buyerName));
+
             const buyerOrders = orders.filter(o => o.buyerName === buyerName);
-            
+
             return buyerOrders.map(o => {
                 const item = items.find(i => i.id === o.itemId);
-                const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
+                const override = buyerPrices ? buyerPrices[o.itemId] : null;
+                const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty, override);
                 
                 return {
                     id: o.id,
@@ -971,8 +1063,13 @@ class BongBongCalculator {
             .reduce((sum, order) => sum + order.qty, 0);
     }
 
-    static getWholesaleUnitPrice(item, qty) {
+    // customPrice(업체 전용가)가 주어지면 수량 티어를 무시하고 전용가를 고정 적용한다.
+    // (업체 전용가가 수량 할인을 "대체" — 사장님 정책)
+    static getWholesaleUnitPrice(item, qty, customPrice = null) {
         if (!item) return 0;
+        if (customPrice != null && Number.isFinite(customPrice)) {
+            return customPrice;
+        }
         let unitPrice = item.basePrice;
         if (item.tiers && item.tiers.length > 0) {
             const matchedTier = [...item.tiers]
@@ -988,7 +1085,8 @@ class BongBongCalculator {
     static async getProjectedRevenue() {
         const items = await BongBongStore.getItems();
         const orders = await BongBongStore.getOrders();
-        
+        const priceMap = await BongBongStore.getBuyerItemPriceMap();
+
         const buyerSummary = {};
         orders.forEach(order => {
             if (!buyerSummary[order.buyerName]) {
@@ -1004,7 +1102,8 @@ class BongBongCalculator {
         for (const [buyer, itemQtyMap] of Object.entries(buyerSummary)) {
             for (const [itemId, totalQty] of Object.entries(itemQtyMap)) {
                 const item = items.find(i => i.id === itemId);
-                const price = this.getWholesaleUnitPrice(item, totalQty);
+                const override = priceMap[buyer] ? priceMap[buyer][itemId] : null;
+                const price = this.getWholesaleUnitPrice(item, totalQty, override);
                 totalRevenue += totalQty * price;
             }
         }
