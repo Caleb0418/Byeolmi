@@ -361,6 +361,54 @@ $$;
 
 grant execute on function public.get_my_buyer() to authenticated;
 
+-- 4-2a. 로그인 시 거래처 정보가 없으면(삭제됨/트리거 누락) '대기' 상태로 재생성
+-- (마이그레이션 20260611000004_ensure_my_buyer.sql 와 동일) — 삭제된 거래처 재등록 동선
+create or replace function public.ensure_my_buyer()
+returns json
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_id      uuid;
+  v_name    text;
+  v_contact text;
+  v_status  text;
+  v_meta_name text;
+begin
+  if auth.uid() is null then
+    return null;
+  end if;
+
+  select id, name, contact, approval_status
+    into v_id, v_name, v_contact, v_status
+    from buyers
+   where auth_uid = auth.uid()
+   limit 1;
+
+  if v_id is null then
+    select coalesce(raw_user_meta_data->>'name', raw_user_meta_data->>'nickname', '신규 거래처')
+      into v_meta_name
+      from auth.users
+     where id = auth.uid();
+
+    insert into buyers (auth_uid, name, approval_status)
+    values (auth.uid(), coalesce(v_meta_name, '신규 거래처'), '대기')
+    returning id, name, contact, approval_status
+      into v_id, v_name, v_contact, v_status;
+  end if;
+
+  return json_build_object(
+    'id', v_id,
+    'name', v_name,
+    'contact', v_contact,
+    'approvalStatus', v_status
+  );
+end;
+$$;
+
+grant execute on function public.ensure_my_buyer() to authenticated;
+
 -- 4-2b. 거래처 계정 목록 RPC (카카오 식별정보 포함) — 거래처 관리 탭에서 사용
 -- (마이그레이션 20260611000003_buyer_company_and_accounts.sql 와 동일)
 create or replace function public.get_buyer_accounts()

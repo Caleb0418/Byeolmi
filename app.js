@@ -648,6 +648,17 @@ class BongBongStore {
         return data; // { id, name, contact, approvalStatus } | null
     }
 
+    // 로그인 사용자의 거래처를 보장(없으면 '대기' 상태로 재생성). 삭제된 거래처 재등록 동선.
+    static async ensureMyBuyer() {
+        if (!supabase) return null;
+        const { data, error } = await supabase.rpc('ensure_my_buyer');
+        if (error) {
+            console.error("Failed to ensure my buyer:", error);
+            throw new Error(error.message);
+        }
+        return data; // { id, name, contact, approvalStatus } | null
+    }
+
     // 거래처 계정 목록(카카오 닉네임/고유ID/업체명 포함) — 거래처 관리 탭용
     static async getBuyerAccounts() {
         if (!supabase) return [];
