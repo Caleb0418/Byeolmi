@@ -120,11 +120,11 @@
         </button>
         <button onclick="switchTab('products')" id="menu-products" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-primary transition-all text-left">
             <span class="material-symbols-outlined">payments</span>
-            <span>품목 및 단가 설정</span>
+            <span>품목 설정</span>
         </button>
         <button onclick="switchTab('buyers')" id="menu-buyers" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-primary transition-all text-left">
             <span class="material-symbols-outlined">groups</span>
-            <span class="flex-1">거래처 관리</span>
+            <span class="flex-1">거래처 관리 및 단가 설정</span>
             <span id="pending-approval-badge" class="hidden min-w-[20px] px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold text-center">0</span>
         </button>
         <button onclick="openSettingsModal()" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-primary transition-all text-left">
@@ -327,7 +327,7 @@
                         <span class="material-symbols-outlined">storefront</span>
                         전체 거래처 접속 상태 및 전용 단가
                     </h3>
-                    <p class="text-xs text-gray-500 mt-1">전용 단가는 <b>품목 및 단가 설정</b> 탭에서 거래처를 선택해 지정할 수 있습니다.</p>
+                    <p class="text-xs text-gray-500 mt-1">전용 단가는 아래 <b>거래처 행을 클릭</b>해 열리는 정보 수정 창에서 지정할 수 있습니다.</p>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
