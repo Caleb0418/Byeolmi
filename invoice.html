@@ -185,8 +185,9 @@
             // Load Data
             const items = await BongBongStore.getItems();
             const orders = await BongBongStore.getOrders();
-            // 업체 전용가 반영을 위해 거래처 id 해석 (owner 또는 본인만 전용가가 적용됨)
+            // 업체 전용가 반영: 거래처 id로 전용가 맵을 직접 조회(RPC 가드 우회 → 데모/비로그인에서도 정상 적용)
             const buyerId = await BongBongStore.getBuyerIdByName(buyer);
+            const buyerPrices = buyerId ? await BongBongStore.getBuyerItemPrices(buyerId) : {};
 
             // 1. 해당 거래처의 주문 수량 집계 + 입금/배송 상태 수집
             const itemQtyMap = {};
@@ -211,9 +212,8 @@
                 const item = items.find(i => i.id === itemId);
                 if (!item) continue;
                 
-                // Get the secure final price from the server via RPC (전용가가 있으면 자동 반영)
-                const benefitInfo = await BongBongStore.getBuyerTierBenefit(itemId, totalQty, buyerId);
-                const finalPrice = benefitInfo ? benefitInfo.currentUnitPrice : item.basePrice;
+                // 전용가가 있으면 전용가, 없으면 기본가 (수량 티어는 폐지됨)
+                const finalPrice = BongBongCalculator.getWholesaleUnitPrice(item, totalQty, buyerPrices[itemId]);
                 const subtotal = totalQty * finalPrice;
                 totalBill += subtotal;
                 count++;

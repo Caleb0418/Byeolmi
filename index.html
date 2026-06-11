@@ -1260,6 +1260,7 @@
             if (isBulkEditing && !isManualCall) return;
 
             try {
+                await refreshBuyerPriceMap();
                 const items = await BongBongStore.getItems();
                 const orders = await BongBongStore.getOrders();
                 const isClosed = await BongBongStore.isClosed();
@@ -1550,6 +1551,7 @@
 
                 // (P3-3) 계좌 정보는 설정값에서 가져옴 (미설정 시 기본값 폴백)
                 const acctInfo = BongBongStore.formatAccount(await BongBongStore.getSettings());
+                await refreshBuyerPriceMap();
 
                 buyersList.forEach(buyer => {
                     const itemQtyMap = buyerSummary[buyer];
@@ -1559,9 +1561,9 @@
                     for (const [itemId, totalQty] of Object.entries(itemQtyMap)) {
                         const item = items.find(i => i.id === itemId);
                         if (!item) continue;
-                        const finalPrice = BongBongCalculator.getWholesaleUnitPrice(item, totalQty);
+                        const finalPrice = effectivePrice(item, buyer, totalQty);
                         const subtotal = totalQty * finalPrice;
-                        
+
                         itemsDetailHtml += `<p class="flex justify-between"><span>• ${item.name} (${totalQty}${item.unit})</span><span>₩${subtotal.toLocaleString()}</span></p>`;
                         totalBill += subtotal;
                     }
@@ -1651,6 +1653,7 @@
                 let successCount = 0;
                 let failCount = 0;
                 const errors = [];
+                await refreshBuyerPriceMap();
 
                 for (const buyerName of buyersList) {
                     const itemQtyMap = buyerSummary[buyerName];
@@ -1661,7 +1664,7 @@
                     for (const [itemId, totalQty] of Object.entries(itemQtyMap)) {
                         const item = items.find(i => i.id === itemId);
                         if (!item) continue;
-                        const finalPrice = BongBongCalculator.getWholesaleUnitPrice(item, totalQty);
+                        const finalPrice = effectivePrice(item, buyerName, totalQty);
                         const subtotal = totalQty * finalPrice;
                         totalAmount += subtotal;
                         itemsDetailSummary += `- ${item.name} (${totalQty}${item.unit}): ₩${subtotal.toLocaleString()}\n`;
@@ -1881,6 +1884,19 @@
     let currentChartPeriod = 'monthly';
     let currentChartItem = 'all';
 
+    // 업체별 전용가 맵 캐시 ({ [buyerName]: { [itemId]: price } }).
+    // 정산/명세/차트 등 동기 계산에서 전용가를 반영하기 위해 데이터 로드시 갱신한다.
+    let buyerPriceMap = {};
+    async function refreshBuyerPriceMap() {
+        try { buyerPriceMap = await BongBongStore.getBuyerItemPriceMap(); }
+        catch (e) { console.error("전용가 맵 갱신 실패:", e); buyerPriceMap = {}; }
+    }
+    // 거래처+품목 기준 실제 적용 단가(전용가 있으면 전용가, 없으면 기본가)
+    function effectivePrice(item, buyerName, qty) {
+        const override = (item && buyerPriceMap[buyerName]) ? buyerPriceMap[buyerName][item.id] : null;
+        return BongBongCalculator.getWholesaleUnitPrice(item, qty, override);
+    }
+
     window.onChartItemFilterChange = async function(itemId) {
         currentChartItem = itemId;
         const data = await BongBongStore.getAnalyticsData();
@@ -1934,6 +1950,7 @@
 
     async function renderAnalyticsBoard() {
         try {
+            await refreshBuyerPriceMap();
             const data = await BongBongStore.getAnalyticsData();
             const tbody = document.getElementById("analytics-buyers-body");
             tbody.innerHTML = "";
@@ -2089,7 +2106,7 @@
                 let daySales = 0;
                 dayOrders.forEach(o => {
                     const item = items.find(it => it.id === o.itemId);
-                    const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
+                    const price = effectivePrice(item, o.buyerName, o.qty);
                     dayVolume += o.qty;
                     daySales += o.qty * price;
                 });
@@ -2121,7 +2138,7 @@
                 let weekSales = 0;
                 weekOrders.forEach(o => {
                     const item = items.find(it => it.id === o.itemId);
-                    const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
+                    const price = effectivePrice(item, o.buyerName, o.qty);
                     weekVolume += o.qty;
                     weekSales += o.qty * price;
                 });
@@ -2146,7 +2163,7 @@
                 let monthSales = 0;
                 monthlyOrders.forEach(o => {
                     const item = items.find(it => it.id === o.itemId);
-                    const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
+                    const price = effectivePrice(item, o.buyerName, o.qty);
                     monthVolume += o.qty;
                     monthSales += o.qty * price;
                 });
@@ -2971,7 +2988,7 @@
 
             orders.forEach(o => {
                 const item = items.find(i => i.id === o.itemId);
-                const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
+                const price = effectivePrice(item, o.buyerName, o.qty);
                 const orderRev = o.qty * price;
 
                 if (buyerMap[o.buyerName]) {
