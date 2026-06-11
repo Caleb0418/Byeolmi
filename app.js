@@ -696,6 +696,24 @@ class BongBongStore {
         this.dispatchStorageChange();
     }
 
+    // 거래처 삭제 (owner 전용). 발주/정산 이력이 있으면 FK 제약으로 막히며, 그 경우 안내 메시지를 던진다.
+    static async deleteBuyer(buyerId) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('buyers')
+            .delete()
+            .eq('id', buyerId);
+        if (error) {
+            console.error("Failed to delete buyer:", error);
+            // FK 위반(발주/정산 이력 존재) 시 사용자 친화 메시지로 변환
+            if (error.code === '23503' || /foreign key|violates/i.test(error.message)) {
+                throw new Error("발주·정산 이력이 있는 거래처는 삭제할 수 없습니다. (이력 보존)");
+            }
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
     static async getBuyerIdByName(buyerName) {
         if (!supabase) return null;
         const { data } = await supabase
