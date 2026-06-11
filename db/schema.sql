@@ -29,6 +29,7 @@ create table buyers (
   address    text,
   approval_status text not null default '대기'         -- 접속 승인 상태 (카카오 로그인 필수 승인제)
                   check (approval_status in ('대기', '승인', '차단')),
+  company_name text,                                   -- 사장님이 지정하는 업체명(비우면 카카오 닉네임 표시)
   created_at timestamptz not null default now()
 );
 
@@ -359,6 +360,41 @@ end;
 $$;
 
 grant execute on function public.get_my_buyer() to authenticated;
+
+-- 4-2b. 거래처 계정 목록 RPC (카카오 식별정보 포함) — 거래처 관리 탭에서 사용
+-- (마이그레이션 20260611000003_buyer_company_and_accounts.sql 와 동일)
+create or replace function public.get_buyer_accounts()
+returns json
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_result json;
+begin
+  select coalesce(json_agg(t), '[]'::json) into v_result
+  from (
+    select
+      b.id,
+      b.name,
+      b.company_name,
+      b.contact,
+      b.approval_status,
+      (b.auth_uid is not null) as is_kakao,
+      (select i.provider_id
+         from auth.identities i
+        where i.user_id = b.auth_uid and i.provider = 'kakao'
+        limit 1) as kakao_id
+    from public.buyers b
+    order by
+      case b.approval_status when '대기' then 0 when '승인' then 1 else 2 end,
+      b.created_at desc
+  ) t;
+  return v_result;
+end;
+$$;
+
+grant execute on function public.get_buyer_accounts() to anon, authenticated;
 
 -- 4-3. 거래처별 품목 전용 단가 (수량 할인 대체)
 -- (마이그레이션 20260611000002_buyer_item_prices.sql 와 동일)

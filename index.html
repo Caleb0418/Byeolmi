@@ -351,8 +351,9 @@
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500">
-                                <th class="px-6 py-3">거래처명</th>
+                                <th class="px-6 py-3">거래처 (카카오 식별)</th>
                                 <th class="px-6 py-3">접속 상태</th>
+                                <th class="px-6 py-3">업체명</th>
                                 <th class="px-6 py-3">적용 중인 전용 단가</th>
                             </tr>
                         </thead>
@@ -3157,29 +3158,45 @@
     // ════════════════════════════════════════════════════════════════
     //  거래처 관리 탭 (접속 승인 + 업체별 전용가 확인)
     // ════════════════════════════════════════════════════════════════
+    // HTML 이스케이프 (사장님이 입력한 업체명/카카오 닉네임 안전 출력)
+    function escHtml(s) {
+        return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    }
+    // 표시명: 업체명이 있으면 업체명, 없으면 카카오 닉네임(name)
+    function buyerDisplayName(b) {
+        return (b.companyName && b.companyName.trim()) ? b.companyName : b.name;
+    }
+    // 카카오 식별 라벨
+    function kakaoIdentityLabel(b) {
+        if (!b.isKakao) return "직접 등록 거래처";
+        return `카카오 ${escHtml(b.name)}${b.kakaoId ? ` · ID ${escHtml(b.kakaoId)}` : ""}`;
+    }
+
     async function renderBuyersTab() {
         const pendingWrap = document.getElementById("buyers-pending-list");
         const tableBody = document.getElementById("buyers-all-body");
         if (!pendingWrap || !tableBody) return;
         try {
-            const buyers = await BongBongStore.getAnalyticsBuyers();
+            const buyers = await BongBongStore.getBuyerAccounts();
             const items = await BongBongStore.getItems();
             const priceMap = await BongBongStore.getBuyerItemPriceMap();
             const itemName = id => { const it = items.find(i => i.id === id); return it ? it.name : id; };
 
-            // 1) 승인 대기 카드 (id 가 있는 거래처만 = 카카오 가입 거래처)
-            const pending = buyers.filter(b => b.id && b.approvalStatus === "대기");
+            // 1) 승인 대기 카드 (카카오 식별정보 + 업체명 입력칸 포함)
+            const pending = buyers.filter(b => b.approvalStatus === "대기");
             if (pending.length === 0) {
                 pendingWrap.innerHTML = `<p class="text-xs text-gray-400 py-6 text-center">새로 들어온 접속 승인 요청이 없습니다.</p>`;
             } else {
                 pendingWrap.innerHTML = pending.map(b => `
-                    <div class="flex items-center justify-between gap-3 bg-yellow-50/70 border border-yellow-200 rounded-xl px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-bold text-gray-800 truncate">${b.name}</div>
-                            <div class="text-[11px] text-yellow-700 font-semibold">접속 승인 대기 중</div>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-yellow-50/70 border border-yellow-200 rounded-xl px-4 py-3">
+                        <div class="min-w-0 flex-1 space-y-1.5">
+                            <div class="text-sm font-bold text-gray-800 truncate">${escHtml(buyerDisplayName(b))}</div>
+                            <div class="text-[11px] text-gray-600">${kakaoIdentityLabel(b)}</div>
+                            <input id="cname-${b.id}" type="text" value="${escHtml(b.companyName || '')}" placeholder="업체명 입력 (예: 마트유통)"
+                                class="w-full sm:max-w-[240px] text-xs rounded-lg border-gray-200 py-1.5 px-2.5 focus:border-secondary focus:ring-secondary">
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
-                            <button onclick="changeBuyerApproval('${b.id}','승인')" class="px-3 py-1.5 bg-secondary hover:bg-opacity-90 text-white rounded-lg text-xs font-bold flex items-center gap-1">
+                            <button onclick="approveBuyer('${b.id}')" class="px-3 py-1.5 bg-secondary hover:bg-opacity-90 text-white rounded-lg text-xs font-bold flex items-center gap-1">
                                 <span class="material-symbols-outlined text-sm">check</span> 승인
                             </button>
                             <button onclick="changeBuyerApproval('${b.id}','차단')" class="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-xs font-bold">차단</button>
@@ -3190,12 +3207,11 @@
             const pendingCount = document.getElementById("buyers-pending-count");
             if (pendingCount) pendingCount.textContent = `${pending.length}건`;
 
-            // 2) 전체 거래처 + 전용가 확인 테이블
-            const dbBuyers = buyers.filter(b => b.id);
-            if (dbBuyers.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="3" class="px-6 py-8 text-center text-gray-400">등록된 거래처가 없습니다.</td></tr>`;
+            // 2) 전체 거래처 테이블 (카카오 식별 / 접속상태 / 업체명 수정 / 전용가)
+            if (buyers.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="4" class="px-6 py-8 text-center text-gray-400">등록된 거래처가 없습니다.</td></tr>`;
             } else {
-                tableBody.innerHTML = dbBuyers.map(b => {
+                tableBody.innerHTML = buyers.map(b => {
                     const appr = b.approvalStatus;
                     const apprColor = appr === "승인" ? "bg-green-50 text-green-700 border-green-200"
                         : appr === "차단" ? "bg-red-50 text-red-700 border-red-200"
@@ -3204,16 +3220,26 @@
                     const customKeys = Object.keys(custom);
                     const priceSummary = customKeys.length === 0
                         ? `<span class="text-[11px] text-gray-400">기본/수량 단가</span>`
-                        : customKeys.map(id => `<span class="inline-block text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 mr-1 mb-1">${itemName(id)} ₩${custom[id].toLocaleString()}</span>`).join("");
+                        : customKeys.map(id => `<span class="inline-block text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 mr-1 mb-1">${escHtml(itemName(id))} ₩${custom[id].toLocaleString()}</span>`).join("");
                     return `
                         <tr class="hover:bg-gray-50 transition-colors">
-                            <td class="px-6 py-4 font-bold text-gray-900 align-top">${b.name}</td>
+                            <td class="px-6 py-4 align-top">
+                                <div class="font-bold text-gray-900">${escHtml(buyerDisplayName(b))}</div>
+                                <div class="text-[11px] text-gray-400 mt-0.5">${kakaoIdentityLabel(b)}</div>
+                            </td>
                             <td class="px-6 py-4 align-top">
                                 <select onchange="changeBuyerApproval('${b.id}', this.value)" class="text-xs font-bold rounded-lg px-2.5 py-1 border outline-none focus:ring-0 cursor-pointer appearance-none ${apprColor}">
                                     <option value="승인" ${appr === '승인' ? 'selected' : ''}>접속 승인</option>
                                     <option value="대기" ${appr === '대기' ? 'selected' : ''}>승인 대기</option>
                                     <option value="차단" ${appr === '차단' ? 'selected' : ''}>접속 차단</option>
                                 </select>
+                            </td>
+                            <td class="px-6 py-4 align-top">
+                                <div class="flex items-center gap-1.5">
+                                    <input id="cname-edit-${b.id}" type="text" value="${escHtml(b.companyName || '')}" placeholder="업체명"
+                                        class="w-32 text-xs rounded-lg border-gray-200 py-1 px-2 focus:border-primary focus:ring-primary">
+                                    <button onclick="saveBuyerCompanyName('${b.id}')" class="px-2.5 py-1 bg-primary hover:bg-opacity-90 text-white rounded-lg text-[11px] font-bold">저장</button>
+                                </div>
                             </td>
                             <td class="px-6 py-4 align-top">${priceSummary}</td>
                         </tr>
@@ -3227,6 +3253,34 @@
             window.BongBongUI && window.BongBongUI.toast("거래처 목록을 불러오지 못했습니다.");
         }
     }
+
+    // 승인 대기 카드에서 업체명 입력 후 승인 (입력값이 있으면 업체명도 함께 저장)
+    window.approveBuyer = async function(buyerId) {
+        const input = document.getElementById(`cname-${buyerId}`);
+        const cname = input ? input.value.trim() : "";
+        try {
+            if (cname) await BongBongStore.updateBuyerCompanyName(buyerId, cname);
+            await changeBuyerApproval(buyerId, "승인");
+        } catch (err) {
+            console.error("Failed to approve buyer:", err);
+            alert("승인 처리에 실패했습니다: " + (err.message || "알 수 없는 오류"));
+        }
+    };
+
+    // 전체 거래처 테이블에서 업체명만 저장
+    window.saveBuyerCompanyName = async function(buyerId) {
+        const input = document.getElementById(`cname-edit-${buyerId}`);
+        const cname = input ? input.value.trim() : "";
+        try {
+            await BongBongStore.updateBuyerCompanyName(buyerId, cname);
+            window.BongBongUI && window.BongBongUI.toast(cname ? "업체명을 저장했습니다." : "업체명을 비웠습니다(카카오 닉네임 표시).", 'success');
+            await renderBuyersTab();
+            await renderPricingBuyerSelect();
+        } catch (err) {
+            console.error("Failed to save company name:", err);
+            alert("업체명 저장에 실패했습니다: " + (err.message || "알 수 없는 오류"));
+        }
+    };
 
     // 사이드바 '거래처 관리' 메뉴의 승인 대기 배지 갱신
     function updatePendingApprovalBadge(buyers) {
@@ -3243,7 +3297,7 @@
 
     window.refreshPendingApprovalBadge = async function() {
         try {
-            const buyers = await BongBongStore.getAnalyticsBuyers();
+            const buyers = await BongBongStore.getBuyerAccounts();
             updatePendingApprovalBadge(buyers);
         } catch (e) { /* 배지 갱신 실패는 무시 */ }
     };
@@ -3271,11 +3325,11 @@
         const select = document.getElementById("pricing-buyer-select");
         if (!select) return;
         try {
-            const buyers = await BongBongStore.getAnalyticsBuyers();
-            const approved = buyers.filter(b => b.id && b.approvalStatus === "승인");
+            const buyers = await BongBongStore.getBuyerAccounts();
+            const approved = buyers.filter(b => b.approvalStatus === "승인");
             const prev = select.value;
             select.innerHTML = `<option value="">거래처 선택...</option>` +
-                approved.map(b => `<option value="${b.id}">${b.name}</option>`).join("");
+                approved.map(b => `<option value="${b.id}">${escHtml(buyerDisplayName(b))}</option>`).join("");
             if (approved.length === 0) {
                 select.innerHTML = `<option value="">승인된 거래처가 없습니다</option>`;
             }
