@@ -431,12 +431,13 @@ declare
   del_buyers      boolean := p_buyers;
   del_items       boolean := p_items;
 begin
-  if del_settlements then delete from settlements; end if;
-  if del_orders      then delete from orders; end if;
-  if del_prices      then delete from buyer_item_prices; end if;
-  if del_tiers       then delete from item_tiers; end if;
-  if del_buyers      then delete from buyers; end if;
-  if del_items       then delete from items; end if;
+  -- where id is not null: 전체 삭제하면서 'WHERE 필수' 안전장치(pg-safeupdate)를 통과
+  if del_settlements then delete from settlements      where id is not null; end if;
+  if del_orders      then delete from orders           where id is not null; end if;
+  if del_prices      then delete from buyer_item_prices where id is not null; end if;
+  if del_tiers       then delete from item_tiers        where id is not null; end if;
+  if del_buyers      then delete from buyers            where id is not null; end if;
+  if del_items       then delete from items             where id is not null; end if;
 
   return json_build_object(
     'settlements', del_settlements, 'orders', del_orders,
