@@ -418,7 +418,8 @@ class BongBongStore {
             itemId: created.item_id,
             qty: created.qty,
             time: created.time,
-            status: created.status
+            status: created.status,
+            createdAt: created.created_at
         };
     }
 

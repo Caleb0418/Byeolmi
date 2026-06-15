@@ -320,7 +320,7 @@
                                     <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">구매자명</th>
                                     <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">품목</th>
                                     <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">수량</th>
-                                    <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">접수시각</th>
+                                    <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">접수일시</th>
                                     <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">상태</th>
                                     <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase text-right" id="manage-header-cell">
                                         관리
@@ -937,6 +937,20 @@
 <script>
     let isBulkEditing = false;
 
+    function formatOrderDateTime(order) {
+        const dateObj = new Date(order.createdAt);
+        if (Number.isNaN(dateObj.getTime())) {
+            return order.time || "-";
+        }
+
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+        const day = String(dateObj.getDate()).padStart(2, "0");
+        const hour = String(dateObj.getHours()).padStart(2, "0");
+        const minute = String(dateObj.getMinutes()).padStart(2, "0");
+        return `${year}-${month}-${day} ${hour}:${minute}`;
+    }
+
     // 모바일 사이드바 토글 기능
     function toggleSidebar(open) {
         const sidebar = document.getElementById("sidebar-menu");
@@ -1111,6 +1125,7 @@
                 orderTableBody.innerHTML = "";
                 orders.forEach(order => {
                     const item = items.find(i => i.id === order.itemId);
+                    const orderDateTime = formatOrderDateTime(order);
                     const statusColor = order.status === "대기" 
                         ? "bg-blue-100 text-blue-700" 
                         : order.status === "승인" 
@@ -1142,7 +1157,7 @@
                                     <input type="number" id="edit-row-qty-${order.id}" value="${order.qty}" min="1" class="w-16 text-xs font-semibold border-gray-200 rounded-xl p-1.5 focus:border-primary focus:ring-primary">
                                     <span class="text-xs text-gray-500 font-bold">${item ? item.unit : '박스'}</span>
                                 </td>
-                                <td class="px-6 py-2 text-xs text-gray-400 font-mono">${order.time}</td>
+                                <td class="px-6 py-2 text-xs text-gray-400 font-mono whitespace-nowrap">${orderDateTime}</td>
                                 <td class="px-6 py-2">
                                     <span class="px-3 py-1.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 whitespace-nowrap">편집중</span>
                                 </td>
@@ -1159,7 +1174,7 @@
                                 <td class="px-6 py-4 font-bold text-sm text-gray-900">${order.buyerName}</td>
                                 <td class="px-6 py-4 text-sm text-gray-600">${item ? item.name : order.itemId}</td>
                                 <td class="px-6 py-4 text-sm font-semibold whitespace-nowrap">${order.qty} ${item ? item.unit : '박스'}</td>
-                                <td class="px-6 py-4 text-sm text-gray-400 font-mono">${order.time}</td>
+                                <td class="px-6 py-4 text-sm text-gray-400 font-mono whitespace-nowrap">${orderDateTime}</td>
                                 <td class="px-6 py-4">
                                     <select onchange="changeOrderStatus(${order.id}, this.value)" class="text-xs font-bold rounded-full pr-8 pl-3.5 py-1.5 border-0 outline-none focus:ring-0 appearance-none text-left ${statusColor} cursor-pointer bg-[right_0.5rem_center] bg-no-repeat bg-[length:12px_12px] min-w-[90px] whitespace-nowrap">
                                         <option value="대기" ${order.status === '대기' ? 'selected' : ''}>대기</option>
