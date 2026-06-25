@@ -133,11 +133,6 @@
             </div>
         </div>
         <div class="flex gap-2 md:gap-4">
-            <button id="approve-orders-btn" class="flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 min-h-11 md:h-12 rounded-xl bg-indigo-600 text-white font-bold text-xs md:text-sm hover:bg-indigo-700 shadow-md transition-all">
-                <span class="material-symbols-outlined text-sm md:text-base">assignment_turned_in</span>
-                <span class="hidden sm:inline">지금까지 들어온 발주 승인하기</span>
-                <span class="sm:hidden">발주 승인</span>
-            </button>
             <button id="send-settle-btn" class="flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 min-h-11 md:h-12 rounded-xl bg-secondary text-white font-bold text-xs md:text-sm hover:bg-opacity-90 shadow-md">
                 <span class="material-symbols-outlined text-sm md:text-base">send</span>
                 <span class="hidden sm:inline">정산 알림톡 일괄 발송</span>
@@ -309,12 +304,16 @@
             <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
                 <!-- Order List (8/12) -->
                 <section class="lg:col-span-8 glass-panel rounded-lg overflow-hidden shadow-sm">
-                    <div class="px-6 py-5 bg-primary text-white flex justify-between items-center">
+                    <div class="px-4 md:px-6 py-5 bg-primary text-white flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
                         <h3 class="text-lg font-bold flex items-center gap-2">
                             <span class="material-symbols-outlined">receipt_long</span>
                             실시간 카카오 취합 내역
                         </h3>
-                        <div class="flex gap-2">
+                        <div class="flex flex-wrap gap-2">
+                            <button id="approve-orders-btn" class="min-h-11 bg-indigo-500 hover:bg-indigo-400 text-white border border-indigo-300/50 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm">
+                                <span class="material-symbols-outlined text-sm">assignment_turned_in</span>
+                                대기 주문 전체 승인
+                            </button>
                             <button id="bulk-edit-btn" onclick="toggleBulkEdit(true)" class="min-h-11 bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1">
                                 <span class="material-symbols-outlined text-sm">edit</span>
                                 일괄 수정
@@ -325,10 +324,10 @@
                             </button>
                         </div>
                     </div>
-                    <div class="overflow-x-auto">
+                    <div class="max-h-[62vh] min-h-[320px] overflow-auto overscroll-contain" aria-label="실시간 주문 취합 내역 스크롤 영역">
                         <table class="w-full text-left border-collapse responsive-orders" aria-label="실시간 주문 취합 테이블">
                             <thead>
-                                <tr class="bg-gray-50 border-b border-gray-200">
+                                <tr class="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 shadow-[0_1px_0_rgba(229,231,235,1)]">
                                     <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">구매자명</th>
                                     <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">품목</th>
                                     <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">수량</th>
@@ -1442,7 +1441,7 @@
                 }
                 if (approveOrdersBtn) {
                     approveOrdersBtn.disabled = false;
-                    approveOrdersBtn.className = "flex-1 md:flex-none flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 h-10 md:h-12 rounded-xl bg-indigo-600 text-white font-bold text-xs md:text-sm whitespace-nowrap hover:bg-indigo-700 shadow-md transition-all";
+                    approveOrdersBtn.className = "min-h-11 bg-indigo-500 hover:bg-indigo-400 text-white border border-indigo-300/50 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm";
                 }
 
                 // 승인 대기 주문 카드 정보 업데이트
