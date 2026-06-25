@@ -993,8 +993,8 @@ class BongBongStore {
         const acct = s.account_number || '';
         const holder = s.account_holder || '';
         return {
-            bankAccount: `${bank} ${acct}`.trim(),              // 예: "국민은행 646801-01-557728"
-            holder,                                              // 예: "김봉준(우모유통)"
+            bankAccount: `${bank} ${acct}`.trim(),              // 예: "국민은행 000-0000-0000-00"
+            holder,                                              // 예: "샘플(테스트)"
             full: `${bank} ${acct} ${holder}`.trim(),           // 복사용 전체 문자열
             digits: acct.replace(/[^0-9]/g, '')                 // 숫자만
         };

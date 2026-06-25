@@ -69,7 +69,7 @@
             </div>
             <div class="flex justify-between">
                 <span class="text-gray-500 font-bold">발행처</span>
-                <span class="text-gray-900">별미집 (우모유통)</span>
+                <span class="text-gray-900">샘플(테스트)</span>
             </div>
         </div>
 
@@ -110,8 +110,8 @@
             <span class="text-xs font-extrabold text-gray-500 uppercase block">무통장 결제 계좌 정보</span>
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-xs font-bold text-gray-800" id="bank-info">국민은행 646801-01-557728</p>
-                    <p class="text-xs text-gray-500 mt-0.5">예금주: 김봉준(우모유통)</p>
+                    <p class="text-xs font-bold text-gray-800" id="bank-info">국민은행 000-0000-0000-00</p>
+                    <p class="text-xs text-gray-500 mt-0.5">예금주: <span id="account-holder">샘플(테스트)</span></p>
                 </div>
                 <button type="button" onclick="copyAccount()" class="min-h-11 flex items-center gap-1 bg-neutralBg hover:bg-gray-100 border border-gray-200 text-[12px] font-bold px-3 py-2 rounded-lg active:scale-95 transition-all text-gray-600" aria-label="별미집 결제계좌 복사">
                     <span class="material-symbols-outlined text-xs">content_copy</span> 계좌 복사
@@ -176,6 +176,7 @@
 
             // 1. 해당 거래처의 주문 수량 집계 + 결제 상태 수집
             const itemQtyMap = {};
+            const buyerPayStatuses = [];
             orders.filter(o => BongBongStore.isActiveOrder(o)).forEach(o => {
                 if (o.buyerName === buyer) {
                     if (!itemQtyMap[o.itemId]) {
@@ -196,9 +197,16 @@
                 const item = items.find(i => i.id === itemId);
                 if (!item) continue;
 
-                // Get the secure final price from the server via RPC
-                const benefitInfo = await BongBongStore.getBuyerTierBenefit(itemId, totalQty);
-                const finalPrice = benefitInfo ? benefitInfo.currentUnitPrice : item.basePrice;
+                const override = Object.prototype.hasOwnProperty.call(buyerPrices, itemId) ? buyerPrices[itemId] : null;
+                let finalPrice = BongBongCalculator.getWholesaleUnitPrice(item, totalQty, override);
+                try {
+                    const benefitInfo = await BongBongStore.getBuyerTierBenefit(itemId, totalQty, buyerId);
+                    if (benefitInfo && typeof benefitInfo.currentUnitPrice === "number") {
+                        finalPrice = benefitInfo.currentUnitPrice;
+                    }
+                } catch (priceErr) {
+                    console.warn("단가 RPC 조회 실패(로컬 계산값 사용):", priceErr);
+                }
                 const subtotal = totalQty * finalPrice;
                 totalBill += subtotal;
                 count++;
