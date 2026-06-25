@@ -48,6 +48,43 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+        .app-container > main {
+            padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important;
+        }
+        #buyer-bottom-nav {
+            display: grid !important;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            align-items: stretch;
+            gap: 0.25rem;
+        }
+        #buyer-bottom-nav > button {
+            display: flex !important;
+            min-width: 0;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 0.125rem;
+            white-space: nowrap;
+        }
+        #my-orders-filter-tabs {
+            display: grid !important;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        #my-orders-filter-tabs > button {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            white-space: nowrap;
+        }
+        #home-view,
+        #step-1,
+        #my-orders-view,
+        #profile-view {
+            padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important;
+        }
         body.client-auth-pending .app-container > :not(#access-gate) {
             visibility: hidden;
         }
@@ -224,7 +261,7 @@
                 <h2 class="font-serif text-lg font-bold text-brandDark">나의 주문</h2>
                 <p class="text-xs text-gray-500">주문 내역과 진행 단계를 확인할 수 있습니다.</p>
             </div>
-            <div class="grid grid-cols-4 gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1" role="tablist" aria-label="주문 상태 필터">
+            <div id="my-orders-filter-tabs" class="grid grid-cols-4 gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1" role="tablist" aria-label="주문 상태 필터">
                 <button type="button" id="my-orders-filter-all" onclick="setMyOrdersFilter('all')" class="min-h-10 rounded-lg bg-white text-xs font-bold text-brandDark shadow-sm">전체</button>
                 <button type="button" id="my-orders-filter-progress" onclick="setMyOrdersFilter('progress')" class="min-h-10 rounded-lg text-xs font-bold text-gray-500">진행 중</button>
                 <button type="button" id="my-orders-filter-complete" onclick="setMyOrdersFilter('complete')" class="min-h-10 rounded-lg text-xs font-bold text-gray-500">완료</button>
