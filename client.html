@@ -438,10 +438,6 @@
             }
         }
         const closedStatusPromise = checkClosedStatus();
-        const initialItemsPromise = BongBongStore.getItems().catch(err => {
-            console.error("Initial item prefetch failed:", err);
-            return null;
-        });
 
         // 0. 승인된 카카오 거래처만 주문 화면에 진입시킨다.
         const access = await resolveAccess();
@@ -463,7 +459,7 @@
             document.getElementById("buyer-contact").value = cachedContact;
         }
 
-        await renderPage(initialItemsPromise);
+        await renderPage();
         updateFloatingBar();
         closedStatusPromise.then(() => {
             if (pageIsClosed) renderPage();
@@ -535,10 +531,9 @@
     }
 
     // 카탈로그 리스트 렌더링
-    async function renderPage(itemsSource = null) {
+    async function renderPage() {
         try {
-            const prefetchedItems = itemsSource ? await itemsSource : null;
-            const items = prefetchedItems || await BongBongStore.getItems();
+            const items = await BongBongStore.getItems();
             const container = document.getElementById("tiers-container");
 
             container.innerHTML = "";
@@ -609,7 +604,7 @@
             }
         } catch (err) {
             console.error("Failed to render page:", err);
-            window.BongBongUI && window.BongBongUI.toast("페이지를 불러오지 못했습니다. 새로고침 해주세요.");
+            showToast("페이지를 불러오지 못했습니다. 새로고침 해주세요.", "error");
         }
     }
 
