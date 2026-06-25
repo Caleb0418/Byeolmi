@@ -99,7 +99,7 @@
             <p class="text-xs text-gray-500 mt-2 font-mono" id="invoice-date">DATE: --.--.--</p>
             <button type="button" onclick="downloadInvoice()" class="invoice-download-button no-print" aria-label="정산 명세서 PDF 다운로드">
                 <span class="material-symbols-outlined text-sm">download</span>
-                다운로드
+                명세서 다운로드
             </button>
         </div>
 
@@ -324,7 +324,60 @@
     }
 
     function downloadInvoice() {
-        window.print();
+        const invoiceEl = document.querySelector(".app-container");
+        if (!invoiceEl) {
+            window.print();
+            return;
+        }
+
+        const printFrame = document.createElement("iframe");
+        printFrame.setAttribute("aria-hidden", "true");
+        printFrame.style.position = "fixed";
+        printFrame.style.right = "0";
+        printFrame.style.bottom = "0";
+        printFrame.style.width = "0";
+        printFrame.style.height = "0";
+        printFrame.style.border = "0";
+        document.body.appendChild(printFrame);
+
+        let didPrint = false;
+        const printOnlyInvoice = () => {
+            if (didPrint) return;
+            didPrint = true;
+            const frameWindow = printFrame.contentWindow;
+            frameWindow.focus();
+            frameWindow.print();
+            setTimeout(() => printFrame.remove(), 1000);
+        };
+        printFrame.onload = () => setTimeout(printOnlyInvoice, 100);
+
+        const clone = invoiceEl.cloneNode(true);
+        clone.querySelectorAll(".no-print").forEach(el => el.remove());
+        const styles = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
+            .map(node => node.outerHTML)
+            .join("\n");
+
+        const doc = printFrame.contentWindow.document;
+        doc.open();
+        doc.write(`<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="${window.location.href}">
+    <title>별미집 정산 명세서</title>
+    ${styles}
+    <style>
+        @page { margin: 12mm; }
+        body { background: #ffffff !important; margin: 0; }
+        .app-container { max-width: 480px !important; min-height: auto !important; margin: 0 auto !important; box-shadow: none !important; }
+    </style>
+</head>
+<body>${clone.outerHTML}</body>
+</html>`);
+        doc.close();
+        setTimeout(printOnlyInvoice, 500);
+
     }
 </script>
 </body>
