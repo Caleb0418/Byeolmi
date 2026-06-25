@@ -182,12 +182,8 @@
         <!-- STEP 1: Product Selection -->
         <div id="step-1" class="step-container hidden space-y-6">
             <!-- 4-Category Slider -->
-            <nav class="flex gap-6 overflow-x-auto no-scrollbar border-b border-gray-50 pb-3 px-2 text-sm font-semibold">
-                <button onclick="filterCategory('all')" id="cat-all" class="min-h-11 min-w-11 px-2 text-brandDark border-b-2 border-brandDark pb-1 shrink-0">전체보기</button>
-                <button onclick="filterCategory('fresh')" id="cat-fresh" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">신선식품</button>
-                <button onclick="filterCategory('easy')" id="cat-easy" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">간편조리</button>
-                <button onclick="filterCategory('snack')" id="cat-snack" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">간식</button>
-                <button onclick="filterCategory('living')" id="cat-living" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">생활용품</button>
+            <nav id="category-tabs" class="flex gap-6 overflow-x-auto no-scrollbar border-b border-gray-50 pb-3 px-2 text-sm font-semibold">
+                <button type="button" class="min-h-11 min-w-11 px-2 text-brandDark border-b-2 border-brandDark pb-1 shrink-0">전체보기</button>
             </nav>
 
             <!-- Dynamic Product Catalog List (No Tiers, No Price Info) -->
@@ -658,21 +654,35 @@
         }
     }
 
+    function getCategoryTabClass(isActive) {
+        return isActive
+            ? "min-h-11 min-w-11 px-2 text-brandDark border-b-2 border-brandDark pb-1 shrink-0"
+            : "min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0";
+    }
+
+    function renderCategoryTabs(items = []) {
+        const nav = document.getElementById("category-tabs");
+        if (!nav) return;
+        const categories = BongBongStore.getCategories(items);
+        if (activeCategory !== "all" && !categories.some(category => category.id === activeCategory)) {
+            activeCategory = "all";
+        }
+
+        nav.innerHTML = "";
+        [{ id: "all", name: "전체보기" }, ...categories].forEach(category => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = getCategoryTabClass(category.id === activeCategory);
+            button.textContent = category.name;
+            button.addEventListener("click", () => filterCategory(category.id));
+            nav.appendChild(button);
+        });
+    }
+
     // 카테고리 필터 변경
     async function filterCategory(catId) {
-        activeCategory = catId;
-        const tabs = ['all', 'fresh', 'easy', 'snack', 'living'];
-        tabs.forEach(t => {
-            const btn = document.getElementById(`cat-${t}`);
-            if (btn) {
-                if (t === catId) {
-                    btn.className = "text-brandDark border-b-2 border-brandDark pb-1 shrink-0";
-                } else {
-                    btn.className = "text-gray-500 hover:text-brandDark pb-1 shrink-0";
-                }
-            }
-        });
-        await renderPage(catId);
+        activeCategory = catId || "all";
+        await renderPage(activeCategory);
     }
 
     function renderCatalogItems(items, category) {
@@ -681,7 +691,7 @@
 
         const filteredItems = category === 'all'
             ? items
-            : items.filter(i => i.category === category);
+            : items.filter(i => BongBongStore.getCategoryId(i.category) === category);
 
         if (filteredItems.length === 0) {
             container.innerHTML = `<p class="text-xs text-gray-500 py-6 text-center">취급 중인 품목이 없습니다.</p>`;
@@ -729,7 +739,7 @@
 
     // 카탈로그 리스트 렌더링
     async function renderPage(category = activeCategory) {
-        const renderCategory = category || 'all';
+        activeCategory = category || 'all';
         const renderSeq = ++catalogRenderSeq;
         const container = document.getElementById("tiers-container");
         if (container && !container.children.length) {
@@ -740,7 +750,8 @@
             const items = await BongBongStore.getItems();
             if (renderSeq !== catalogRenderSeq) return;
 
-            renderCatalogItems(items, renderCategory);
+            renderCategoryTabs(items);
+            renderCatalogItems(items, activeCategory);
             if (currentView === "home") await renderHomeDashboard(items);
             else await renderPendingOrdersPanel(items);
             if (currentView === "myOrders") await renderMyOrders(items);

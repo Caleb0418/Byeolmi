@@ -190,12 +190,8 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-bold text-gray-500 mb-1">카테고리</label>
-                                    <select id="edit-product-category" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
-                                        <option value="fresh">신선식품</option>
-                                        <option value="easy">간편조리</option>
-                                        <option value="snack">간식</option>
-                                        <option value="living">생활용품</option>
-                                    </select>
+                                    <input type="text" id="edit-product-category" list="product-category-options" required placeholder="예: 신선식품" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
+                                    <datalist id="product-category-options"></datalist>
                                 </div>
                             </div>
 
@@ -1091,12 +1087,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-500 mb-1">카테고리</label>
-                        <select id="add-product-category" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
-                            <option value="fresh">신선식품</option>
-                            <option value="easy">간편조리</option>
-                            <option value="snack">간식</option>
-                            <option value="living">생활용품</option>
-                        </select>
+                        <input type="text" id="add-product-category" list="product-category-options" required placeholder="예: 신선식품" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
                     </div>
                 </div>
 
@@ -2793,9 +2784,39 @@
     const productEditorForm = document.getElementById("product-editor-form");
     const deleteProductBtn = document.getElementById("delete-product-btn");
 
+    function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"']/g, char => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            "\"": "&quot;",
+            "'": "&#39;"
+        }[char]));
+    }
+
+    async function refreshProductCategoryOptions(itemsSource = null) {
+        const datalist = document.getElementById("product-category-options");
+        if (!datalist) return;
+        let items = itemsSource;
+        if (!items) {
+            try {
+                items = await BongBongStore.getItems();
+            } catch (err) {
+                items = [];
+            }
+        }
+        datalist.innerHTML = "";
+        BongBongStore.getCategories(items, { includeDefaults: true }).forEach(category => {
+            const option = document.createElement("option");
+            option.value = category.name;
+            datalist.appendChild(option);
+        });
+    }
+
     async function renderModalProductList() {
         try {
             const items = await BongBongStore.getItems();
+            await refreshProductCategoryOptions(items);
             modalProductList.innerHTML = "";
 
             // (P3-3) 품목 0개 첫 사용 빈 상태 — 첫 품목 등록을 유도
@@ -2828,13 +2849,14 @@
                     tiersText = `<div class="flex flex-wrap gap-1 mt-2">${innerTiers}</div>`;
                 }
 
+                const categoryLabel = escapeHtml(BongBongStore.getCategoryLabel(item.category));
                 const div = `
                     <button type="button" onclick="loadProductToEditor('${item.id}')" class="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-xl cursor-pointer transition-all border border-transparent hover:border-gray-200">
                         <div class="flex justify-between items-center">
                             <h5 class="font-bold text-sm text-gray-800">${item.name}</h5>
                             ${statusBadge}
                         </div>
-                        <p class="text-xs text-gray-400 mt-1">도매단가: ₩${item.basePrice.toLocaleString()} / 단위: ${item.unit}</p>
+                        <p class="text-xs text-gray-400 mt-1">분류: ${categoryLabel} · 도매단가: ₩${item.basePrice.toLocaleString()} / 단위: ${item.unit}</p>
                         ${tiersText}
                     </button>
                 `;
@@ -2853,7 +2875,9 @@
         const modal = document.getElementById("product-add-modal");
         if (modal) {
             openAccessibleModal("product-add-modal");
+            refreshProductCategoryOptions();
             document.getElementById("product-add-form").reset();
+            document.getElementById("add-product-category").value = "신선식품";
             document.getElementById("add-tiers-container").innerHTML = "";
             document.getElementById("add-tiers-preview").classList.add("hidden");
             document.getElementById("add-product-status").value = "true";
@@ -2963,6 +2987,7 @@
         document.getElementById("edit-product-id").value = "";
         productEditorForm.reset();
         document.getElementById("edit-product-status").value = "true";
+        document.getElementById("edit-product-category").value = "신선식품";
         document.getElementById("editor-tiers-container").innerHTML = "";
         document.getElementById("editor-tiers-preview").classList.add("hidden");
         deleteProductBtn.classList.add("hidden");
@@ -2984,7 +3009,8 @@
 
             document.getElementById("edit-product-id").value = item.id;
             document.getElementById("edit-product-name").value = item.name;
-            document.getElementById("edit-product-category").value = item.category;
+            await refreshProductCategoryOptions(items);
+            document.getElementById("edit-product-category").value = BongBongStore.getCategoryLabel(item.category);
             document.getElementById("edit-product-base-price").value = item.basePrice;
             document.getElementById("edit-product-unit").value = item.unit;
             document.getElementById("edit-product-status").value = (item.isAvailable !== false).toString();
@@ -3129,7 +3155,7 @@
         }
 
         const name = document.getElementById("edit-product-name").value.trim();
-        const category = document.getElementById("edit-product-category").value;
+        const category = BongBongStore.getCategoryId(document.getElementById("edit-product-category").value);
         const basePrice = parseInt(document.getElementById("edit-product-base-price").value, 10);
         const unit = document.getElementById("edit-product-unit").value.trim();
         const isAvailable = document.getElementById("edit-product-status").value === "true";
@@ -3180,7 +3206,7 @@
             e.preventDefault();
 
             const name = document.getElementById("add-product-name").value.trim();
-            const category = document.getElementById("add-product-category").value;
+            const category = BongBongStore.getCategoryId(document.getElementById("add-product-category").value);
             const basePrice = parseInt(document.getElementById("add-product-base-price").value, 10);
             const unit = document.getElementById("add-product-unit").value.trim();
             const isAvailable = document.getElementById("add-product-status").value === "true";

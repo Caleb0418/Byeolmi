@@ -3,7 +3,7 @@
 -- 품목 테이블 (기본가 포함)
 create table items (
   id           text primary key,                       -- 'potato' 등 슬러그
-  category     text not null check (category in ('fresh','easy','snack','living')),
+  category     text not null check (length(btrim(category)) > 0),
   name         text not null,
   base_price   integer not null check (base_price > 0), -- 구매자에게 노출되는 기본 판매가
   unit         text not null,

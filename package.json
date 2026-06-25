@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "build:css": "tailwindcss -i ./src/tailwind.css -o ./dist/tailwind.css --minify",
-    "test": "node tests/calculator.test.js && node tests/crypt.test.js"
+    "test": "node tests/calculator.test.js && node tests/crypt.test.js && node tests/categories.test.js"
   },
   "devDependencies": {
     "@tailwindcss/container-queries": "^0.1.1",
