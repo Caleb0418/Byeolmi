@@ -145,20 +145,16 @@
                 <div id="pending-orders-list" class="space-y-2"></div>
             </section>
 
-            <!-- Welcome Hero Banner (B2B Mode) -->
-            <div class="relative bg-neutralBg border border-gray-100 p-5 rounded-xl space-y-1 overflow-hidden">
-                <h2 class="font-serif text-lg font-bold">도매 파트너 발주방</h2>
-                <p class="text-xs text-gray-500">도매 공급 품목 발주 전용 페이지입니다. 품목별 발주할 수량을 담아주세요.</p>
-                <div class="absolute -right-4 -bottom-4 opacity-5">
-                    <span class="material-symbols-outlined text-8xl">local_mall</span>
+            <section class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm space-y-4" aria-labelledby="home-start-order-title">
+                <div class="space-y-1">
+                    <h2 id="home-start-order-title" class="font-serif text-lg font-bold text-brandDark">오늘 발주 준비</h2>
+                    <p class="text-xs text-gray-500">필요한 품목을 담고 발주를 시작하세요.</p>
                 </div>
-            </div>
-
-            <button type="button" onclick="showProducts()" class="w-full min-h-12 rounded-xl bg-brandDark text-sm font-bold text-white shadow-sm hover:bg-black flex items-center justify-center gap-2">
-                <span class="material-symbols-outlined text-sm">storefront</span>
-                상품 보러가기
-            </button>
-
+                <button type="button" onclick="showProducts()" class="w-full min-h-12 rounded-xl bg-brandDark text-sm font-bold text-white shadow-sm hover:bg-black flex items-center justify-center gap-2">
+                    <span class="material-symbols-outlined text-sm">storefront</span>
+                    상품 보러가기
+                </button>
+            </section>
             <section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm space-y-3" aria-labelledby="home-recent-orders-title">
                 <div class="flex items-center justify-between gap-3">
                     <h3 id="home-recent-orders-title" class="text-sm font-bold text-gray-900">최근 주문</h3>
@@ -181,7 +177,8 @@
                 <h3 id="home-notice-title" class="text-sm font-bold text-gray-900">오늘 안내</h3>
                 <p class="text-xs font-semibold leading-relaxed text-gray-600">승인 전 주문은 취소할 수 있어요.</p>
                 <p class="text-xs font-semibold leading-relaxed text-gray-600">완료된 주문은 명세서를 확인할 수 있어요.</p>
-            </section>        </section>
+            </section>
+        </section>
         <!-- STEP 1: Product Selection -->
         <div id="step-1" class="step-container hidden space-y-6">
             <!-- 4-Category Slider -->
@@ -879,6 +876,7 @@
             step1.classList.remove("hidden");
             stepIndicator.textContent = profileComplete ? "1 / 2 단계" : "1 / 3 단계";
             headerTitle.textContent = "도매 발주 품목 선택";
+            await renderPage(activeCategory);
             updateFloatingBar();
         } else if (stepNumber === 2) {
             document.getElementById("floating-bar")?.classList.add("hidden");
