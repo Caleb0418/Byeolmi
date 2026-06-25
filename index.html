@@ -1852,7 +1852,7 @@
         }
 
         function buildSettlementMessage({ buyerName, todayStr, itemsDetailSummary, totalAmount, invoiceUrl }) {
-            return `[별미집] 정산 요청 안내\n\n안녕하세요, ${buyerName} 대표님.\n금일(${todayStr}) 별미집 도매 발주에 대한 정산 명세서가 발행되었습니다.\n\n■ 주문 정산 내역\n${itemsDetailSummary}\n■ 최종 청구 금액: ₩${totalAmount.toLocaleString()}\n\n입금 계좌: 국민은행 646801-01-557728 김봉준(우모유통)\n입금 시 거래처명 또는 대표자명으로 입금해 주세요.\n\n상세 명세서: ${invoiceUrl}`;
+            return `[별미집] 정산 요청 안내\n\n안녕하세요, ${buyerName} 대표님.\n금일(${todayStr}) 별미집 도매 발주에 대한 정산 명세서가 발행되었습니다.\n\n■ 주문 정산 내역\n${itemsDetailSummary}\n■ 최종 청구 금액: ₩${totalAmount.toLocaleString()}\n\n입금 계좌: 국민은행 000-0000-0000-00 샘플(테스트)\n입금 시 거래처명 또는 대표자명으로 입금해 주세요.\n\n상세 명세서: ${invoiceUrl}`;
         }
 
         function updatePreviewSelectionStatus() {
