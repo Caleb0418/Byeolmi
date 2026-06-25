@@ -45,6 +45,35 @@
                 display: none !important;
             }
         }
+        .invoice-download-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-height: 44px;
+            margin-top: 16px;
+            padding: 10px 18px;
+            border: 1px solid #155e46;
+            border-radius: 10px;
+            background: #155e46;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 800;
+            line-height: 1;
+            box-shadow: 0 4px 12px rgba(21, 94, 70, 0.18);
+            transition: transform 120ms ease, background-color 120ms ease;
+        }
+        .invoice-download-button:hover {
+            background: #104b38;
+        }
+        .invoice-download-button:active {
+            transform: scale(0.98);
+        }
+        .invoice-download-button .material-symbols-outlined {
+            color: inherit;
+            font-size: 18px;
+            line-height: 1;
+        }
         .app-container {
             max-width: 480px;
             margin: 0 auto;
@@ -68,9 +97,9 @@
             <span class="text-xs tracking-widest text-brandAccent font-bold block mb-1">WHOLESALE INVOICE</span>
             <h1 class="font-serif text-2xl font-bold tracking-tight text-brandDark">별미집 정산 명세서</h1>
             <p class="text-xs text-gray-500 mt-2 font-mono" id="invoice-date">DATE: --.--.--</p>
-            <button type="button" onclick="downloadInvoice()" class="no-print mt-4 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-brandAccent/20 bg-brandAccent px-4 py-2 text-xs font-extrabold text-white shadow-sm transition-all hover:bg-brandAccent/90 active:scale-95" aria-label="정산 명세서 PDF 다운로드">
+            <button type="button" onclick="downloadInvoice()" class="invoice-download-button no-print" aria-label="정산 명세서 PDF 다운로드">
                 <span class="material-symbols-outlined text-sm">download</span>
-                다운로드
+                명세서 다운로드
             </button>
         </div>
 
@@ -295,7 +324,60 @@
     }
 
     function downloadInvoice() {
-        window.print();
+        const invoiceEl = document.querySelector(".app-container");
+        if (!invoiceEl) {
+            window.print();
+            return;
+        }
+
+        const printFrame = document.createElement("iframe");
+        printFrame.setAttribute("aria-hidden", "true");
+        printFrame.style.position = "fixed";
+        printFrame.style.right = "0";
+        printFrame.style.bottom = "0";
+        printFrame.style.width = "0";
+        printFrame.style.height = "0";
+        printFrame.style.border = "0";
+        document.body.appendChild(printFrame);
+
+        let didPrint = false;
+        const printOnlyInvoice = () => {
+            if (didPrint) return;
+            didPrint = true;
+            const frameWindow = printFrame.contentWindow;
+            frameWindow.focus();
+            frameWindow.print();
+            setTimeout(() => printFrame.remove(), 1000);
+        };
+        printFrame.onload = () => setTimeout(printOnlyInvoice, 100);
+
+        const clone = invoiceEl.cloneNode(true);
+        clone.querySelectorAll(".no-print").forEach(el => el.remove());
+        const styles = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
+            .map(node => node.outerHTML)
+            .join("\n");
+
+        const doc = printFrame.contentWindow.document;
+        doc.open();
+        doc.write(`<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="${window.location.href}">
+    <title>별미집 정산 명세서</title>
+    ${styles}
+    <style>
+        @page { margin: 12mm; }
+        body { background: #ffffff !important; margin: 0; }
+        .app-container { max-width: 480px !important; min-height: auto !important; margin: 0 auto !important; box-shadow: none !important; }
+    </style>
+</head>
+<body>${clone.outerHTML}</body>
+</html>`);
+        doc.close();
+        setTimeout(printOnlyInvoice, 500);
+
     }
 </script>
 </body>
