@@ -325,6 +325,8 @@
     let lastSubmittedOrderSnapshot = null;
     let isEditingSubmittedOrder = false;
     let pageIsClosed = false;
+    let profileComplete = false;
+    const CONTACT_RE = /^01[016789]-?\d{3,4}-?\d{4}$/;
     let catalogRenderSeq = 0;
 
     let toastTimer = null;
@@ -421,7 +423,7 @@
     });
 
 
-    document.addEventListener("DOMContentLoaded", async () => {
+    async function initClientPage() {
         // 0-0. 마감 여부 실시간 확인 및 UI 차단
         async function checkClosedStatus() {
             try {
@@ -499,7 +501,13 @@
                 )
                 .subscribe();
         }
-    });
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initClientPage, { once: true });
+    } else {
+        initClientPage();
+    }
 
     // 마감 시 UI 비활성화 함수
     function updateUIForClosed() {
