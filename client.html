@@ -321,6 +321,7 @@
     let lastSubmittedOrderIds = [];
     let lastSubmittedOrderSnapshot = null;
     let isEditingSubmittedOrder = false;
+    let pageIsClosed = false;
 
     let toastTimer = null;
     function showToast(message, tone = "info") {
@@ -421,6 +422,7 @@
         async function checkClosedStatus() {
             try {
                 const isClosed = await BongBongStore.isClosed();
+                pageIsClosed = isClosed;
                 const closedAlert = document.getElementById("closed-alert");
 
                 if (isClosed) {
@@ -523,7 +525,6 @@
     async function renderPage() {
         try {
             const items = await BongBongStore.getItems();
-            await renderPendingOrdersPanel(items);
             const container = document.getElementById("tiers-container");
 
             container.innerHTML = "";
@@ -537,7 +538,7 @@
                 return;
             }
 
-            const isClosed = await BongBongStore.isClosed();
+            const isClosed = pageIsClosed;
 
             filteredItems.forEach(item => {
                 const isAvail = item.isAvailable !== false;
@@ -578,6 +579,8 @@
                 `;
                 container.insertAdjacentHTML("beforeend", itemHtml);
             });
+
+            renderPendingOrdersPanel(items);
 
             // (P3-3) 푸터 입금 계좌를 설정값으로 1회 바인딩 (실패 시 기본값 유지)
             if (!window.__footerAccountBound) {
