@@ -14,6 +14,12 @@ if (window.supabase && typeof window.supabase.createClient === 'function') {
 var supabase = window.supabase;
 
 // 0-1. Zod 스키마 정의 (외부 입력 검증용)
+// zod UMD 번들은 전역을 `Zod`로 노출한다. 기존 코드는 `window.z`를 참조하므로
+// 별칭을 잡아 준다. (이 누락으로 입력 검증이 조용히 비활성화돼 있었음 — silent failure 방지)
+if (typeof window !== 'undefined' && !window.z && window.Zod) {
+    window.z = window.Zod;
+}
+
 let ItemSchema;
 let OrderSchema;
 
@@ -73,30 +79,14 @@ const CATEGORIES = [
     { id: "living", name: "생활용품" }
 ];
 
-// 과거 정산 분석용 데이터
+// 분석 기본 빈 구조 (실데이터가 없거나 조회 실패 시 폴백)
+// 주의(P1-3): 기존의 하드코딩 더미 매출/거래처 값은 실제처럼 오인될 수 있어 제거했다.
+// 실제 추이/거래처 통계는 aggregateChartData(orders) 및 getAnalyticsBuyers()가 동적으로 계산한다.
 const ANALYTICS_DATA = {
-    monthly: {
-        labels: ["12월", "1월", "2월", "3월", "4월", "5월"],
-        sales: [18400000, 22100000, 19500000, 25600000, 28900000, 32450000],
-        volumes: [980, 1120, 950, 1280, 1380, 1540]
-    },
-    weekly: {
-        labels: ["1주차", "2주차", "3주차", "4주차", "5주차"],
-        sales: [5800000, 6200000, 7100000, 6800000, 6550000],
-        volumes: [280, 310, 340, 320, 315]
-    },
-    daily: {
-        labels: ["22일", "23일", "24일", "25일", "26일", "27일", "28일"],
-        sales: [980000, 1200000, 850000, 1450000, 1100000, 1320000, 1240000],
-        volumes: [48, 60, 42, 72, 55, 66, 62]
-    },
-    buyers: [
-        { name: "박민지 (맘공구)", mainItem: "골드 감자", qty: 340, revenue: 6120000, status: "정상" },
-        { name: "최유진 (마트)", mainItem: "깐마늘 XL", qty: 180, revenue: 4200000, status: "미수금 ₩120,000" },
-        { name: "이정재 (대형유통)", mainItem: "골드 감자", qty: 250, revenue: 3750000, status: "정상" },
-        { name: "김선호 (야채상)", mainItem: "빨간 양파", qty: 140, revenue: 1680000, status: "정상" },
-        { name: "정해인 (식자재)", mainItem: "골드 감자", qty: 95, revenue: 1425000, status: "정상" }
-    ]
+    monthly: { labels: [], sales: [], volumes: [] },
+    weekly:  { labels: [], sales: [], volumes: [] },
+    daily:   { labels: [], sales: [], volumes: [] },
+    buyers: []
 };
 
 // LocalStorage 및 Supabase 통합 입출력 제어 클래스
@@ -345,6 +335,9 @@ class BongBongStore {
         if (!supabase) throw new Error("Database not connected");
 
         // RLS 및 데이터 관계 매핑을 위한 buyer_id 조회 또는 생성
+        // 접속 승인제 전환(20260611000001): 비로그인 발주는 폐기됨.
+        //   - 구매자 자가 발주: client.html 접속 게이트가 로그인+승인을 강제하므로 여기 도달 시 user 존재.
+        //   - 사장님 수동 발주: owner 권한 RLS 로 임의 거래처에 대해 삽입 가능(이름 기준 조회/생성).
         let buyerId = null;
         const { data: { user } } = await supabase.auth.getUser();
 
@@ -352,11 +345,19 @@ class BongBongStore {
         if (user) {
             const { data: buyerData } = await supabase
                 .from('buyers')
-                .select('id')
+                .select('id, contact')
                 .eq('auth_uid', user.id)
                 .maybeSingle();
             if (buyerData) {
                 buyerId = buyerData.id;
+                // "한 번 입력 → 이후 자동": 프로필에 연락처가 없을 때 이번 발주에 입력한 번호를 저장해
+                // 다음 발주부터 자동완성되게 한다. (기존 번호가 있으면 임의로 덮어쓰지 않음)
+                if (formattedContact && !buyerData.contact) {
+                    await supabase
+                        .from('buyers')
+                        .update({ contact: formattedContact })
+                        .eq('id', buyerId);
+                }
             }
         }
 
@@ -536,11 +537,13 @@ class BongBongStore {
 
             const orders = await this.getOrders();
             const items = await this.getItems();
+            const priceMap = await this.getBuyerItemPriceMap();
 
             const buyerStats = {};
             orders.forEach(order => {
                 const item = items.find(i => i.id === order.itemId);
-                const price = BongBongCalculator.getWholesaleUnitPrice(item, order.qty);
+                const override = priceMap[order.buyerName] ? priceMap[order.buyerName][order.itemId] : null;
+                const price = BongBongCalculator.getWholesaleUnitPrice(item, order.qty, override);
                 const subtotal = order.qty * price;
 
                 if (!buyerStats[order.buyerName]) {
@@ -575,6 +578,8 @@ class BongBongStore {
                 }
 
                 return {
+                    id: buyer.id,
+                    approvalStatus: buyer.approval_status || '대기',
                     name: buyer.name,
                     lastOrderDate: stats.lastOrderDate || "발주 이력 없음",
                     unpaidCount: stats.unpaidCount,
@@ -594,6 +599,8 @@ class BongBongStore {
                     }
 
                     resultBuyers.push({
+                        id: null,
+                        approvalStatus: null,
                         name: name,
                         lastOrderDate: stats.lastOrderDate || "발주 이력 없음",
                         unpaidCount: stats.unpaidCount,
@@ -645,6 +652,10 @@ class BongBongStore {
             };
         } catch (err) {
             console.error("Failed to fetch analytics data:", err);
+            // (P2-2) 조용한 폴백을 사용자에게 알림 (브라우저에서만 동작)
+            if (typeof window !== 'undefined' && window.BongBongUI) {
+                window.BongBongUI.toast("분석 데이터 일부를 불러오지 못했습니다.");
+            }
             return {
                 buyers,
                 orders: [],
@@ -654,15 +665,205 @@ class BongBongStore {
         }
     }
 
-    static async getBuyerTierBenefit(itemId, qty) {
+    static async getBuyerTierBenefit(itemId, qty, buyerId = null) {
         if (!supabase) return null;
+        const params = { p_item_id: itemId, p_qty: qty };
+        if (buyerId) params.p_buyer_id = buyerId;
         const { data, error } = await supabase
-            .rpc('get_buyer_tier_benefit', { p_item_id: itemId, p_qty: qty });
+            .rpc('get_buyer_tier_benefit', params);
         if (error) {
             console.error("Failed to get buyer tier benefit:", error);
             throw new Error(error.message);
         }
         return data;
+    }
+
+    // ── 접속 승인제 (거래처 승인 상태 관리) ─────────────────────────────
+    // 현재 로그인 사용자의 거래처 정보(승인 상태 포함) 조회 — client.html 접속 게이트용
+    static async getMyBuyer() {
+        if (!supabase) return null;
+        const { data, error } = await supabase.rpc('get_my_buyer');
+        if (error) {
+            console.error("Failed to get my buyer:", error);
+            throw new Error(error.message);
+        }
+        return data; // { id, name, contact, approvalStatus } | null
+    }
+
+    // 로그인 사용자의 거래처를 보장(없으면 '대기' 상태로 재생성). 삭제된 거래처 재등록 동선.
+    static async ensureMyBuyer() {
+        if (!supabase) return null;
+        const { data, error } = await supabase.rpc('ensure_my_buyer');
+        if (error) {
+            console.error("Failed to ensure my buyer:", error);
+            throw new Error(error.message);
+        }
+        return data; // { id, name, contact, approvalStatus } | null
+    }
+
+    // 거래처 계정 목록(카카오 닉네임/고유ID/업체명 포함) — 거래처 관리 탭용
+    static async getBuyerAccounts() {
+        if (!supabase) return [];
+        const { data, error } = await supabase.rpc('get_buyer_accounts');
+        if (error) {
+            console.error("Failed to fetch buyer accounts:", error);
+            throw new Error(error.message);
+        }
+        return (data || []).map(b => ({
+            id: b.id,
+            name: b.name,
+            companyName: b.company_name || null,
+            contact: b.contact || null,
+            approvalStatus: b.approval_status,
+            isKakao: !!b.is_kakao,
+            kakaoId: b.kakao_id || null
+        }));
+    }
+
+    // 업체명 저장 (owner 전용). 빈 값이면 null 로 비워 카카오 닉네임 표시로 복귀.
+    static async updateBuyerCompanyName(buyerId, companyName) {
+        if (!supabase) return;
+        const value = (companyName && companyName.trim()) ? companyName.trim() : null;
+        const { error } = await supabase
+            .from('buyers')
+            .update({ company_name: value })
+            .eq('id', buyerId);
+        if (error) {
+            console.error("Failed to update company name:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
+    // 거래처 승인 상태 변경 (owner 전용) — '대기' | '승인' | '차단'
+    static async updateBuyerApproval(buyerId, status) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('buyers')
+            .update({ approval_status: status })
+            .eq('id', buyerId);
+        if (error) {
+            console.error("Failed to update buyer approval:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
+    // 거래처 삭제 (owner 전용). 발주/정산 이력이 있으면 FK 제약으로 막히며, 그 경우 안내 메시지를 던진다.
+    static async deleteBuyer(buyerId) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('buyers')
+            .delete()
+            .eq('id', buyerId);
+        if (error) {
+            console.error("Failed to delete buyer:", error);
+            // FK 위반(발주/정산 이력 존재) 시 사용자 친화 메시지로 변환
+            if (error.code === '23503' || /foreign key|violates/i.test(error.message)) {
+                throw new Error("발주·정산 이력이 있는 거래처는 삭제할 수 없습니다. (이력 보존)");
+            }
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
+    // 데이터 초기화 (owner 전용, 되돌릴 수 없음). 선택한 항목을 FK 안전 순서로 삭제.
+    static async resetData(opts) {
+        if (!supabase) return null;
+        const o = opts || {};
+        const { data, error } = await supabase.rpc('reset_data', {
+            p_orders: !!o.orders,
+            p_settlements: !!o.settlements,
+            p_prices: !!o.prices,
+            p_buyers: !!o.buyers,
+            p_items: !!o.items
+        });
+        if (error) {
+            console.error("Failed to reset data:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+        return data;
+    }
+
+    static async getBuyerIdByName(buyerName) {
+        if (!supabase) return null;
+        const { data } = await supabase
+            .from('buyers')
+            .select('id')
+            .eq('name', buyerName)
+            .maybeSingle();
+        return data ? data.id : null;
+    }
+
+    // ── 업체별 전용 단가 ───────────────────────────────────────────────
+    // 특정 거래처의 품목별 전용가 조회 → { [itemId]: price }
+    static async getBuyerItemPrices(buyerId) {
+        if (!supabase || !buyerId) return {};
+        const { data, error } = await supabase
+            .from('buyer_item_prices')
+            .select('item_id, price')
+            .eq('buyer_id', buyerId);
+        if (error) {
+            console.error("Failed to fetch buyer item prices:", error);
+            throw new Error(error.message);
+        }
+        const map = {};
+        (data || []).forEach(row => { map[row.item_id] = row.price; });
+        return map;
+    }
+
+    // 전 거래처 전용가를 거래처명 기준 맵으로 → { [buyerName]: { [itemId]: price } }
+    // (owner 대시보드의 매출/정산 계산에서 전용가를 반영하기 위함)
+    static async getBuyerItemPriceMap() {
+        if (!supabase) return {};
+        try {
+            const { data, error } = await supabase
+                .from('buyer_item_prices')
+                .select('item_id, price, buyers(name)');
+            if (error) throw error;
+            const map = {};
+            (data || []).forEach(row => {
+                const name = row.buyers ? row.buyers.name : null;
+                if (!name) return;
+                if (!map[name]) map[name] = {};
+                map[name][row.item_id] = row.price;
+            });
+            return map;
+        } catch (err) {
+            console.error("Failed to build buyer item price map:", err);
+            return {};
+        }
+    }
+
+    static async setBuyerItemPrice(buyerId, itemId, price) {
+        if (!supabase) return;
+        const parsed = parseInt(price, 10);
+        if (!buyerId || !itemId || isNaN(parsed) || parsed < 0) {
+            throw new Error("전용가는 0원 이상의 숫자여야 합니다.");
+        }
+        const { error } = await supabase
+            .from('buyer_item_prices')
+            .upsert({ buyer_id: buyerId, item_id: itemId, price: parsed }, { onConflict: 'buyer_id,item_id' });
+        if (error) {
+            console.error("Failed to set buyer item price:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
+    static async deleteBuyerItemPrice(buyerId, itemId) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('buyer_item_prices')
+            .delete()
+            .eq('buyer_id', buyerId)
+            .eq('item_id', itemId);
+        if (error) {
+            console.error("Failed to delete buyer item price:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
     }
 
     static async getApprovedOwners() {
@@ -695,7 +896,74 @@ class BongBongStore {
             .from('approved_owners')
             .delete()
             .eq('email', email);
+        // (P2-2) 조용한 실패 제거: 오류를 로깅하고 호출부로 전파한다.
+        if (error) {
+            console.error("Failed to delete approved owner:", error);
+            throw new Error(error.message);
+        }
     }
+
+    // (P3-3) 운영 설정(계좌/상호) — 하드코딩 제거. 테이블이 없거나 비어 있어도 기본값으로 안전 폴백.
+    static get DEFAULT_SETTINGS() {
+        return {
+            business_name: '별미집',
+            bank_name: '국민은행',
+            account_number: '000-0000-0000-00',
+            account_holder: '샘플(테스트)'
+        };
+    }
+
+    static async getSettings() {
+        const defaults = this.DEFAULT_SETTINGS;
+        if (!supabase) return { ...defaults };
+        try {
+            const { data, error } = await supabase
+                .from('app_settings')
+                .select('key, value');
+            if (error) throw error;
+            const map = { ...defaults };
+            (data || []).forEach(row => {
+                if (row.value) map[row.key] = row.value;
+            });
+            return map;
+        } catch (err) {
+            // app_settings 테이블 미생성 시에도 기본값으로 동작 (마이그레이션 전 안전)
+            console.error("Failed to fetch settings (기본값 사용):", err);
+            return { ...defaults };
+        }
+    }
+
+    static async updateSettings(entries) {
+        if (!supabase) return;
+        const rows = Object.entries(entries).map(([key, value]) => ({
+            key,
+            value: value == null ? '' : String(value),
+            updated_at: new Date().toISOString()
+        }));
+        const { error } = await supabase
+            .from('app_settings')
+            .upsert(rows, { onConflict: 'key' });
+        if (error) {
+            console.error("Failed to update settings:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
+    // 설정값으로부터 계좌 표기 문자열들을 생성 (표시 형식 일원화)
+    static formatAccount(settings) {
+        const s = settings || this.DEFAULT_SETTINGS;
+        const bank = s.bank_name || '';
+        const acct = s.account_number || '';
+        const holder = s.account_holder || '';
+        return {
+            bankAccount: `${bank} ${acct}`.trim(),              // 예: "국민은행 646801-01-557728"
+            holder,                                              // 예: "김봉준(우모유통)"
+            full: `${bank} ${acct} ${holder}`.trim(),           // 복사용 전체 문자열
+            digits: acct.replace(/[^0-9]/g, '')                 // 숫자만
+        };
+    }
+
     static async sendAlimtalk(buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl, templateId = null, customMessage = null) {
         if (!supabase) throw new Error("Database not connected");
         const { data, error } = await supabase.functions.invoke('send-alimtalk', {
@@ -714,6 +982,91 @@ class BongBongStore {
             throw error;
         }
         return data;
+    }
+
+    // (P1-2) 발주 접수 확인 알림톡 발송 (구매자 대상).
+    // 호출부(client.html)에서 fail-safe 로 처리하여 발송 실패가 발주 성공을 막지 않도록 한다.
+    static async sendOrderConfirmation(buyerName, contact, itemsDetailSummary) {
+        if (!supabase) throw new Error("Database not connected");
+        const { data, error } = await supabase.functions.invoke('send-alimtalk', {
+            body: { type: 'order_confirm', buyerName, contact, itemsDetailSummary }
+        });
+        if (error) {
+            console.error("Failed to invoke order confirmation alimtalk:", error);
+            throw error;
+        }
+        return data;
+    }
+
+    // (P1-1) 알림톡 발송에 실패한 정산 내역 조회 (거래처 정보 포함)
+    static async getFailedSettlements() {
+        if (!supabase) return [];
+        const { data, error } = await supabase
+            .from('settlements')
+            .select('*, buyers(name, contact)')
+            .eq('send_status', 'failed')
+            .order('created_at', { ascending: false });
+        if (error) {
+            console.error("Failed to fetch failed settlements:", error);
+            throw new Error(error.message);
+        }
+        return data.map(s => ({
+            id: s.id,
+            buyerName: s.buyers ? s.buyers.name : '(알 수 없는 거래처)',
+            settledDate: s.settled_date,
+            totalAmount: s.total_amount,
+            errorMessage: s.error_message
+        }));
+    }
+
+    // (P1-1) 단일 정산 건 알림톡 재전송. 명세서 요약을 재구성해 Edge Function 재호출 후 상태 갱신.
+    static async resendAlimtalk(settlementId) {
+        if (!supabase) throw new Error("Database not connected");
+
+        // 1. 정산 + 거래처 정보 로드
+        const { data: s, error } = await supabase
+            .from('settlements')
+            .select('*, buyers(name, contact)')
+            .eq('id', settlementId)
+            .maybeSingle();
+        if (error) throw new Error(error.message);
+        if (!s) throw new Error("정산 내역을 찾을 수 없습니다.");
+
+        const buyerName = s.buyers ? s.buyers.name : '';
+        const contact = s.buyers && s.buyers.contact
+            ? BongBongCrypt.decrypt(s.buyers.contact)
+            : '010-0000-0000';
+
+        // 2. 명세서 요약 재구성 (settlement.detail: [{ itemId, qty, price }])
+        const items = await this.getItems();
+        let itemsDetailSummary = "";
+        (s.detail || []).forEach(d => {
+            const item = items.find(i => i.id === d.itemId);
+            const name = item ? item.name : d.itemId;
+            const unit = item ? item.unit : '';
+            const subtotal = (d.qty || 0) * (d.price || 0);
+            itemsDetailSummary += `- ${name} (${d.qty}${unit}): ₩${subtotal.toLocaleString()}\n`;
+        });
+        const invoiceUrl = window.location.origin + `/invoice.html?buyer=${encodeURIComponent(buyerName)}`;
+
+        // 3. 재발송 시도 후 결과를 정산 상태에 반영
+        try {
+            await this.sendAlimtalk(buyerName, contact, s.total_amount, itemsDetailSummary, invoiceUrl);
+            const { error: upErr } = await supabase
+                .from('settlements')
+                .update({ send_status: 'sent', sent_at: new Date().toISOString(), error_message: null })
+                .eq('id', settlementId);
+            if (upErr) throw new Error(upErr.message);
+            this.dispatchStorageChange();
+            return { success: true };
+        } catch (sendErr) {
+            await supabase
+                .from('settlements')
+                .update({ send_status: 'failed', error_message: sendErr.message })
+                .eq('id', settlementId);
+            this.dispatchStorageChange();
+            throw sendErr;
+        }
     }
 
     static async saveSettlement(settlement) {
@@ -801,11 +1154,13 @@ class BongBongStore {
             const orders = await this.getOrders();
             const items = await this.getItems();
 
+            const buyerPrices = await this.getBuyerItemPrices(await this.getBuyerIdByName(buyerName));
             const buyerOrders = orders.filter(o => this.isActiveOrder(o) && o.buyerName === buyerName);
 
             return buyerOrders.map(o => {
                 const item = items.find(i => i.id === o.itemId);
-                const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty);
+                const override = buyerPrices ? buyerPrices[o.itemId] : null;
+                const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty, override);
 
                 return {
                     id: o.id,
@@ -900,8 +1255,13 @@ class BongBongCalculator {
             .reduce((sum, order) => sum + order.qty, 0);
     }
 
-    static getWholesaleUnitPrice(item, qty) {
+    // customPrice(업체 전용가)가 주어지면 수량 티어를 무시하고 전용가를 고정 적용한다.
+    // (업체 전용가가 수량 할인을 "대체" — 사장님 정책)
+    static getWholesaleUnitPrice(item, qty, customPrice = null) {
         if (!item) return 0;
+        if (customPrice != null && Number.isFinite(customPrice)) {
+            return customPrice;
+        }
         let unitPrice = item.basePrice;
         if (item.tiers && item.tiers.length > 0) {
             const matchedTier = [...item.tiers]
@@ -916,7 +1276,8 @@ class BongBongCalculator {
 
     static async getProjectedRevenue() {
         const items = await BongBongStore.getItems();
-        const orders = await BongBongStore.getOrders();
+        const orders = (await BongBongStore.getOrders()).filter(order => BongBongStore.isActiveOrder(order));
+        const priceMap = await BongBongStore.getBuyerItemPriceMap();
 
         const buyerSummary = {};
         orders.forEach(order => {
@@ -933,7 +1294,8 @@ class BongBongCalculator {
         for (const [buyer, itemQtyMap] of Object.entries(buyerSummary)) {
             for (const [itemId, totalQty] of Object.entries(itemQtyMap)) {
                 const item = items.find(i => i.id === itemId);
-                const price = this.getWholesaleUnitPrice(item, totalQty);
+                const override = priceMap[buyer] ? priceMap[buyer][itemId] : null;
+                const price = this.getWholesaleUnitPrice(item, totalQty, override);
                 totalRevenue += totalQty * price;
             }
         }
@@ -1042,13 +1404,27 @@ class BongBongAuth {
 
 window.BongBongAuth = BongBongAuth;
 
+// 연락처 보호 정책 (P0-2)
+// - 기존에는 CryptoJS.AES 로 클라이언트에서 암호화했으나, 키(CRYPTO_SECRET)가 소스에 노출되어
+//   누구나 복호화 가능 → 실질적 보안 효과가 없었으므로 제거했다.
+// - 실제 보안 경계는 buyers 테이블의 RLS(소유자 또는 본인만 select/update 가능)가 담당한다.
+//   따라서 연락처는 평문으로 저장하고, 화면 노출 시에는 maskContact() 로 마스킹한다.
+// - encrypt/decrypt 는 호출부 호환을 위해 패스스루로 유지한다. (실제 변환 없음)
 class BongBongCrypt {
+    // 평문 저장 (RLS 로 보호). 호출부 호환용 패스스루.
     static encrypt(text) {
         return text || "";
     }
 
-    static decrypt(cipher) {
-        return cipher || "";
+    // 평문은 그대로 반환. 레거시 AES 암호문('Salted__' base64 → 'U2FsdGVk' 접두)은
+    // 키가 더 이상 존재하지 않아 복호화 불가하므로 빈 값으로 처리(재입력 유도).
+    static decrypt(value) {
+        if (!value) return "";
+        if (typeof value === 'string' && value.startsWith('U2FsdGVk')) {
+            console.warn("레거시 암호화 연락처는 복호화할 수 없습니다. 재입력이 필요합니다.");
+            return "";
+        }
+        return value;
     }
 
     static maskContact(contact) {
@@ -1057,7 +1433,7 @@ class BongBongCrypt {
         if (clean.length === 11) {
             return `${clean.slice(0, 3)}-****-${clean.slice(7)}`;
         } else if (clean.length === 10) {
-            return `${clean.slice(0, 3)}-***-${clean.slice(6)}`;
+            return `${clean.slice(0, 3)}-****-${clean.slice(6)}`;
         }
         return contact.replace(/(\d{3})-(\d{3,4})-(\d{4})/, '$1-****-$3');
     }
@@ -1073,3 +1449,48 @@ class BongBongCrypt {
 }
 
 window.BongBongCrypt = BongBongCrypt;
+
+// (P2-2) 공용 사용자 알림(toast) 유틸 — 조용한 실패를 사용자에게 노출하기 위함.
+// 브라우저에서만 동작하고, document 가 없으면(테스트 등) 안전하게 no-op 한다.
+const BongBongUI = {
+    toast(message, type = 'error') {
+        try {
+            if (typeof document === 'undefined' || !document.body) return;
+            let container = document.getElementById('bb-toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'bb-toast-container';
+                container.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
+                document.body.appendChild(container);
+            }
+            const colors = { error: '#dc2626', success: '#16a34a', info: '#334155' };
+            const el = document.createElement('div');
+            el.setAttribute('role', 'status');
+            el.setAttribute('aria-live', 'polite');
+            el.style.cssText = `pointer-events:auto;max-width:90vw;padding:10px 16px;border-radius:12px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.18);background:${colors[type] || colors.info};opacity:0;transition:opacity .2s ease;`;
+            el.textContent = message;
+            container.appendChild(el);
+            requestAnimationFrame(() => { el.style.opacity = '1'; });
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 250);
+            }, 3500);
+        } catch (e) {
+            // 토스트 표시 실패가 앱 흐름을 막지 않도록 무시
+        }
+    }
+};
+window.BongBongUI = BongBongUI;
+
+// Node.js 테스트 환경을 위한 CommonJS export (브라우저에서는 module 이 없어 무시됨)
+// 테스트가 복붙 사본이 아닌 실제 프로덕션 로직을 검증하도록 한다 (드리프트 방지).
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        BongBongCalculator,
+        BongBongStore,
+        BongBongAuth,
+        BongBongCrypt,
+        BongBongUI,
+        CATEGORIES
+    };
+}

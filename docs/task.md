@@ -40,3 +40,30 @@
 - `[x]` **[Phase 8] 최종 통합 시뮬레이션 및 깃 커밋**
   - `[x]` `test_bed.html`에서 통계 탭 및 테이블 일괄 편집의 모든 신규 고도화 기능 검증
   - `[x]` 변경 사항을 Atomic Commit에 따라 Git 저장소에 커밋 및 푸시
+
+- `[x]` **[Phase 9] P0 보안/데이터 정합성 하드닝 (배포 차단 항목)** — 상세: `docs/antigravity_progress.md`
+  - `[x]` (P0-1) `handle_new_user` 트리거의 owner 권한 백도어 제거 → `approved_owners` 화이트리스트 전용
+  - `[x]` (P0-2) `app.js` 클라이언트 측 하드코딩 암호화 키(`CRYPTO_SECRET`) 및 AES 제거, RLS+마스킹 정책 전환
+  - `[x]` (P0-3) `orders`/`settlements` `payment_status` 컬럼 정식 정의 (코드-스키마 드리프트 해소)
+  - `[x]` (P0-4) `supabase/migrations/` 마이그레이션 체계 도입 (이력 추적)
+  - `[ ]` (배포) 운영 DB에 마이그레이션 적용 + 레거시 암호문 점검 + 프론트 재배포 — 담당자 확인 필요
+
+- `[x]` **[Phase 10] P1 PRD 핵심 기능** — 상세: `docs/antigravity_progress.md`
+  - `[x]` (P1-1) 알림톡 발송 실패 개별 재전송 UI/로직 (정산 모달 + `resendAlimtalk`)
+  - `[x]` (P1-2) 발주 제출 시 구매자 주문요약 알림톡 (코드 경로 구현, fail-safe)
+    - `[ ]` (배포) Solapi 발주확인 템플릿 승인 + `SOLAPI_ORDER_TEMPLATE_ID` 설정 + Edge Function 재배포
+  - `[x]` (P1-3) 분석 데이터(`ANALYTICS_DATA`) 실집계 기반 동적화 + 빈 상태 처리
+
+- `[x]` **[Phase 11] P2 안정성/품질** — 상세: `docs/antigravity_progress.md`
+  - `[x]` (P2-1) 테스트 보강 — 실제 로직 import, 20개 케이스, `npm test`
+  - `[x]` (P2-2) silent failure 제거 — 공용 토스트 + 렌더링 catch 연결, `deleteApprovedOwner` 전파
+  - `[x]` (P2-3) 폴링→Realtime — 기존 구현 확인(orders/items/client 구독, 폴링 0건)
+  - `[x]` (P2-4) 접근성 초기 개선 — focus-visible + prefers-reduced-motion (3개 페이지)
+    - `[ ]` (후속) 색대비·터치타깃·aria-label·스크린리더 정식 WCAG 감사 (a11y-architect + 브라우저)
+
+- `[~]` **[Phase 12] P3 운영 준비** — 상세: `docs/antigravity_progress.md`
+  - `[x]` (P3-1) Vercel 보안 헤더(`vercel.json`) — CI/`.env.example`은 후속
+  - `[x]` (P3-3) 온보딩 UX — 계좌/상호 설정 분리(`app_settings`) + 빈 상태 UX
+    - `[ ]` (배포) `20260603000003_app_settings.sql` 운영 DB 적용, 선택적 `BANK_INFO` env
+  - `[ ]` (P3-2) 카카오 알림톡 템플릿 2종 심사 — 운영자 영역
+  - `[ ]` (P3-1 후속) GitHub Actions(테스트 자동화), `.env.example`

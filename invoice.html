@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>별미집 - 도매 발주 정산 명세서</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
     <!-- Fonts & Icons -->
     <link href="https://fonts.googleapis.com" rel="preconnect"/>
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -12,6 +15,20 @@
     <!-- Tailwind CSS -->
     <link href="dist/tailwind.css" rel="stylesheet">
     <style>
+        /* (P2-4) 접근성: 키보드 포커스 가시성 + 모션 민감 사용자 배려 */
+        :focus-visible {
+            outline: 3px solid #2563eb;
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.001ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
         body {
             background-color: #f3f4f6;
         }
@@ -110,7 +127,7 @@
     <!-- Footer Synced with Cafe24 -->
     <footer class="mt-8 pt-6 border-t border-gray-100 text-xs text-gray-500 text-center space-y-1">
         <p class="font-bold text-gray-700">올바른 선택 별미집</p>
-        <p>인천광역시 중구 연안부두로107번길 34 2동 2층 2호(항동7가)</p>
+        <p>샘플특별시 샘플구 테스트로 00 (테스트)</p>
         <p>Copyright © 별미집. All Rights Reserved.</p>
     </footer>
 </div>
@@ -119,6 +136,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 <script>
+    // (P3-3) 계좌/상호 설정 캐시 (copyAccount 등에서 재사용)
+    let invoiceSettings = null;
+
     document.addEventListener("DOMContentLoaded", async () => {
         // Query Params
         const params = new URLSearchParams(window.location.search);
@@ -135,12 +155,26 @@
         const now = new Date();
         document.getElementById("invoice-date").textContent = `DATE: ${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
 
+        // (P3-3) 운영 설정(계좌/상호) 로드 후 계좌 영역 바인딩 (실패 시 기본값 유지)
+        try {
+            invoiceSettings = await BongBongStore.getSettings();
+            const acct = BongBongStore.formatAccount(invoiceSettings);
+            document.getElementById("bank-info").textContent = acct.bankAccount;
+            const holderEl = document.getElementById("account-holder");
+            if (holderEl) holderEl.textContent = acct.holder;
+        } catch (e) {
+            console.error("설정 로드 실패(기본값 유지):", e);
+        }
+
         try {
             // Load Data
             const items = await BongBongStore.getItems();
             const orders = await BongBongStore.getOrders();
+            // 업체 전용가 반영: 거래처 id로 전용가 맵을 직접 조회(RPC 가드 우회 → 데모/비로그인에서도 정상 적용)
+            const buyerId = await BongBongStore.getBuyerIdByName(buyer);
+            const buyerPrices = buyerId ? await BongBongStore.getBuyerItemPrices(buyerId) : {};
 
-            // 1. 해당 거래처의 주문 수량 집계
+            // 1. 해당 거래처의 주문 수량 집계 + 결제 상태 수집
             const itemQtyMap = {};
             orders.filter(o => BongBongStore.isActiveOrder(o)).forEach(o => {
                 if (o.buyerName === buyer) {
@@ -148,6 +182,7 @@
                         itemQtyMap[o.itemId] = 0;
                     }
                     itemQtyMap[o.itemId] += o.qty;
+                    buyerPayStatuses.push(o.paymentStatus);
                 }
             });
 
@@ -184,6 +219,16 @@
             } else {
                 document.getElementById("invoice-total").textContent = `₩${totalBill.toLocaleString()}`;
             }
+
+            // 3. 입금 상태 표기: 거래처의 모든 주문이 '수금완료'면 '입금 완료', 아니면 '입금 대기'
+            const statusEl = document.getElementById("payment-status");
+            if (statusEl) {
+                const isPaid = buyerPayStatuses.length > 0 && buyerPayStatuses.every(s => s === '수금완료');
+                statusEl.textContent = isPaid ? "입금 완료" : "입금 대기";
+                statusEl.className = isPaid
+                    ? "px-2 py-0.5 rounded text-xs font-bold bg-green-50 text-green-700 border border-green-200"
+                    : "px-2 py-0.5 rounded text-xs font-bold bg-yellow-50 text-yellow-700 border border-yellow-200";
+            }
         } catch (err) {
             console.error("Failed to load invoice:", err);
             document.getElementById("invoice-items").innerHTML = `<tr><td colspan="4" class="py-6 text-center text-red-500">정산 명세서 데이터를 불러오는 중 오류가 발생했습니다.</td></tr>`;
@@ -206,7 +251,10 @@
     }
 
     function copyAccount() {
-        const textToCopy = "국민은행 64680101557728 김봉준(우모유통)";
+        // (P3-3) 설정값 기반 복사 (미로드 시 기본값으로 안전 폴백)
+        const acct = BongBongStore.formatAccount(invoiceSettings);
+        const biz = (invoiceSettings && invoiceSettings.business_name) || BongBongStore.DEFAULT_SETTINGS.business_name;
+        const textToCopy = `${acct.bankAccount.replace(/-/g, '')} ${acct.holder}`.trim();
         navigator.clipboard.writeText(textToCopy).then(() => {
             showToast("별미집 결제계좌 정보가 복사되었습니다.", "success");
         }).catch(err => {
