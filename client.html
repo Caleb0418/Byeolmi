@@ -235,9 +235,13 @@
                     주문 취소하기
                 </button>
             </div>
-            <button type="button" onclick="closeOrderSuccessDrawer()" class="w-full min-h-12 bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm text-sm active:scale-98 transition-all flex items-center justify-center gap-1.5">
+            <button type="button" onclick="startAdditionalOrder()" class="w-full min-h-12 bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm text-sm active:scale-98 transition-all flex items-center justify-center gap-1.5">
+                <span class="material-symbols-outlined text-sm">add_shopping_cart</span>
+                추가 발주하기
+            </button>
+            <button type="button" onclick="closeOrderSuccessDrawer()" class="w-full min-h-12 border border-gray-200 bg-white text-gray-800 font-bold py-4 rounded-xl text-sm active:scale-98 transition-all flex items-center justify-center gap-1.5">
                 <span class="material-symbols-outlined text-sm">done</span>
-                확인 완료
+                주문서 닫기
             </button>
         </div>
     </div>
@@ -291,12 +295,17 @@
 
     let lastFocusedElement = null;
     let pendingConfirmResolve = null;
+    function getFocusableElements(container) {
+        return [...container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+            .filter(el => !el.disabled && el.offsetParent !== null);
+    }
+
     function openSimpleModal(modalId) {
         const modal = document.getElementById(modalId);
         if (!modal) return;
         lastFocusedElement = document.activeElement;
         modal.classList.remove("hidden");
-        modal.querySelector("button, input, select, textarea, [href]")?.focus();
+        getFocusableElements(modal)[0]?.focus();
     }
 
     function closeSimpleModal(modalId) {
@@ -334,8 +343,29 @@
     document.getElementById("confirm-action-cancel")?.addEventListener("click", () => resolveConfirmation(false));
     document.getElementById("confirm-action-confirm")?.addEventListener("click", () => resolveConfirmation(true));
     document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && !document.getElementById("confirm-action-modal")?.classList.contains("hidden")) {
-            resolveConfirmation(false);
+        const confirmModal = document.getElementById("confirm-action-modal");
+        const openDialog = confirmModal && !confirmModal.classList.contains("hidden")
+            ? confirmModal
+            : [...document.querySelectorAll('[role="dialog"]:not(.hidden)')].at(-1);
+        if (!openDialog) return;
+
+        if (event.key === "Escape") {
+            if (openDialog.id === "confirm-action-modal") resolveConfirmation(false);
+            else if (openDialog.id === "order-success-drawer") closeOrderSuccessDrawer();
+            return;
+        }
+
+        if (event.key !== "Tab") return;
+        const focusable = getFocusableElements(openDialog);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
         }
     });
 
@@ -830,9 +860,11 @@
             feedback.textContent = "";
         }
 
+        lastFocusedElement = document.activeElement;
         drawer.classList.remove("hidden");
         setTimeout(() => {
             inner.classList.remove("translate-y-full");
+            getFocusableElements(drawer)[0]?.focus();
         }, 10);
     };
 
@@ -843,6 +875,7 @@
         inner.classList.add("translate-y-full");
         setTimeout(() => {
             drawer.classList.add("hidden");
+            if (lastFocusedElement && typeof lastFocusedElement.focus === "function") lastFocusedElement.focus();
         }, 300);
     };
 
@@ -879,6 +912,19 @@
             updateFloatingBar();
         } catch (err) {
             showOrderSuccessFeedback("주문 수정 준비 중 오류가 발생했습니다: " + err.message, "error");
+        }
+    };
+
+    window.startAdditionalOrder = async function() {
+        try {
+            selectedItems.clear();
+            isEditingSubmittedOrder = false;
+            closeOrderSuccessDrawer();
+            await renderPage();
+            await goToStep(1);
+            updateFloatingBar();
+        } catch (err) {
+            showToast("새 발주를 준비하는 중 오류가 발생했습니다: " + err.message, "error");
         }
     };
 

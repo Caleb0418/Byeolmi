@@ -974,12 +974,17 @@
     window.toggleSidebar = toggleSidebar;
 
     let lastFocusedElement = null;
+    function getFocusableElements(container) {
+        return [...container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+            .filter(el => !el.disabled && el.offsetParent !== null);
+    }
+
     function openAccessibleModal(modalId) {
         const modal = document.getElementById(modalId);
         if (!modal) return;
         lastFocusedElement = document.activeElement;
         modal.classList.remove("hidden");
-        const firstFocusable = modal.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const firstFocusable = getFocusableElements(modal)[0];
         if (firstFocusable) firstFocusable.focus();
     }
 
@@ -993,29 +998,92 @@
     }
 
     document.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape") return;
-        const openModal = document.querySelector('[role="dialog"]:not(.hidden)');
-        if (openModal && openModal.id) {
+        const confirmModal = document.getElementById("confirm-action-modal");
+        const openModal = confirmModal && !confirmModal.classList.contains("hidden")
+            ? confirmModal
+            : [...document.querySelectorAll('[role="dialog"]:not(.hidden)')].at(-1);
+        if (!openModal || !openModal.id) return;
+
+        if (event.key === "Escape") {
             if (openModal.id === "confirm-action-modal") resolveConfirmation(false);
             else closeAccessibleModal(openModal.id);
+            return;
+        }
+
+        if (event.key !== "Tab") return;
+        const focusable = getFocusableElements(openModal);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
         }
     });
 
     let toastTimer = null;
-    function showToast(message, tone = "info") {
-        const toast = document.getElementById("app-toast");
-        if (!toast) return;
-        const toneClass = tone === "success"
+    function getToastToneClass(tone) {
+        return tone === "success"
             ? "bg-green-50 border-green-200 text-green-800"
             : tone === "error"
             ? "bg-red-50 border-red-200 text-red-800"
             : tone === "warning"
             ? "bg-amber-50 border-amber-200 text-amber-800"
             : "bg-primary border-primary text-white";
-        toast.className = "fixed bottom-4 left-4 right-4 z-[70] mx-auto max-w-md rounded-xl border px-4 py-3 text-sm font-bold shadow-lg " + toneClass;
+    }
+
+    function showToast(message, tone = "info") {
+        const toast = document.getElementById("app-toast");
+        if (!toast) return;
+        toast.className = "fixed bottom-4 left-4 right-4 z-[70] mx-auto max-w-md rounded-xl border px-4 py-3 text-sm font-bold shadow-lg " + getToastToneClass(tone);
         toast.textContent = message;
         clearTimeout(toastTimer);
         toastTimer = setTimeout(() => toast.classList.add("hidden"), 3200);
+    }
+
+    function showUndoToast(message, undoLabel, onUndo) {
+        const toast = document.getElementById("app-toast");
+        if (!toast) return;
+        toast.className = "fixed bottom-4 left-4 right-4 z-[70] mx-auto max-w-md rounded-xl border px-4 py-3 text-sm font-bold shadow-lg bg-primary border-primary text-white";
+        toast.replaceChildren();
+        const row = document.createElement("div");
+        row.className = "flex items-center justify-between gap-3";
+        const text = document.createElement("span");
+        text.textContent = message;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "shrink-0 rounded-lg border border-white/40 px-3 py-1.5 text-xs font-extrabold hover:bg-white/10";
+        button.textContent = undoLabel;
+        button.addEventListener("click", async () => {
+            clearTimeout(toastTimer);
+            toast.classList.add("hidden");
+            await onUndo();
+        }, { once: true });
+        row.append(text, button);
+        toast.append(row);
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.add("hidden"), 6000);
+    }
+
+    const ORDER_STATUS_STYLES = {
+        "대기": "bg-blue-100 text-blue-700",
+        "승인": "bg-green-100 text-green-700",
+        "배송중": "bg-yellow-100 text-yellow-700",
+        "완료": "bg-gray-100 text-gray-700",
+        "취소됨": "bg-red-50 text-red-600 line-through"
+    };
+    const PAYMENT_STATUS_STYLES = {
+        "미수금": "bg-red-50 text-red-700 border-red-200",
+        "수금완료": "bg-green-50 text-green-700 border-green-200"
+    };
+    function getOrderStatusClass(status) {
+        return ORDER_STATUS_STYLES[status] || "bg-gray-100 text-gray-700";
+    }
+    function getPaymentStatusClass(status) {
+        return PAYMENT_STATUS_STYLES[status] || PAYMENT_STATUS_STYLES["미수금"];
     }
 
     let pendingConfirmResolve = null;
@@ -1237,15 +1305,7 @@
                 orders.forEach(order => {
                     const item = items.find(i => i.id === order.itemId);
                     const orderDateTime = formatOrderDateTime(order);
-                    const statusColor = order.status === "대기"
-                        ? "bg-blue-100 text-blue-700"
-                        : order.status === "승인"
-                        ? "bg-green-100 text-green-700"
-                        : order.status === "배송중"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : order.status === "취소됨"
-                        ? "bg-red-50 text-red-600 line-through"
-                        : "bg-gray-100 text-gray-700";
+                    const statusColor = getOrderStatusClass(order.status);
                     const rowMutedClass = order.status === "취소됨" ? "opacity-60" : "";
 
                     const isEditing = isBulkEditing;
@@ -2770,9 +2830,24 @@
 
     window.changeOrderStatus = async function(orderId, newStatus) {
         try {
+            const orders = await BongBongStore.getOrders();
+            const previousOrder = orders.find(order => String(order.id) === String(orderId));
+            const previousStatus = previousOrder ? previousOrder.status : null;
             await BongBongStore.updateOrderStatus(orderId, newStatus);
             await renderAdminDashboard();
-            showToast(`주문 상태를 ${newStatus}(으)로 변경했습니다.`, "success");
+            if (previousStatus && previousStatus !== newStatus) {
+                showUndoToast(`주문 상태를 ${newStatus}(으)로 변경했습니다.`, "되돌리기", async () => {
+                    try {
+                        await BongBongStore.updateOrderStatus(orderId, previousStatus);
+                        await renderAdminDashboard(true);
+                        showToast(`주문 상태를 ${previousStatus}(으)로 되돌렸습니다.`, "success");
+                    } catch (undoErr) {
+                        showToast("상태 되돌리기에 실패했습니다.", "error");
+                    }
+                });
+            } else {
+                showToast(`주문 상태를 ${newStatus}(으)로 변경했습니다.`, "success");
+            }
         } catch (err) {
             showToast("상태 수정에 실패했습니다.", "error");
         }
@@ -3159,7 +3234,7 @@
                     const dateObj = new Date(o.createdAt || new Date());
                     const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')} ${String(dateObj.getHours()).padStart(2,'0')}:${String(dateObj.getMinutes()).padStart(2,'0')}`;
 
-                    const selectBg = isUnpaid ? "bg-red-50 text-red-700 border-red-200" : "bg-green-50 text-green-700 border-green-200";
+                    const selectBg = getPaymentStatusClass(isUnpaid ? "미수금" : "수금완료");
 
                     const tr = `
                         <tr class="h-12 hover:bg-gray-50">
@@ -3214,9 +3289,24 @@
 
     window.changeOrderPaymentStatus = async function(orderId, buyerName, status) {
         try {
+            const orders = await BongBongStore.getOrdersByBuyerName(buyerName);
+            const previousOrder = orders.find(order => String(order.id) === String(orderId));
+            const previousStatus = previousOrder ? previousOrder.paymentStatus : null;
             await BongBongStore.updateOrderPaymentStatus(orderId, status);
             await openBuyerSettlementsModal(buyerName);
             await renderAnalyticsBoard();
+            if (previousStatus && previousStatus !== status) {
+                showUndoToast(`수금 상태를 ${status}(으)로 변경했습니다.`, "되돌리기", async () => {
+                    try {
+                        await BongBongStore.updateOrderPaymentStatus(orderId, previousStatus);
+                        await openBuyerSettlementsModal(buyerName);
+                        await renderAnalyticsBoard();
+                        showToast(`수금 상태를 ${previousStatus}(으)로 되돌렸습니다.`, "success");
+                    } catch (undoErr) {
+                        showToast("수금 상태 되돌리기에 실패했습니다.", "error");
+                    }
+                });
+            }
         } catch (err) {
             showToast("상태 수정에 실패했습니다.", "error");
         }
