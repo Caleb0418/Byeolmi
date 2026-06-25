@@ -325,6 +325,7 @@
     let lastSubmittedOrderSnapshot = null;
     let isEditingSubmittedOrder = false;
     let pageIsClosed = false;
+    let catalogRenderSeq = 0;
 
     let toastTimer = null;
     function showToast(message, tone = "info") {
@@ -459,7 +460,7 @@
             document.getElementById("buyer-contact").value = cachedContact;
         }
 
-        await renderPage();
+        await renderPage('all');
         updateFloatingBar();
         closedStatusPromise.then(() => {
             if (pageIsClosed) renderPage();
@@ -527,84 +528,94 @@
                 }
             }
         });
-        await renderPage();
+        await renderPage(catId);
+    }
+
+    function renderCatalogItems(items, category) {
+        const container = document.getElementById("tiers-container");
+        if (!container) return;
+
+        const filteredItems = category === 'all'
+            ? items
+            : items.filter(i => i.category === category);
+
+        if (filteredItems.length === 0) {
+            container.innerHTML = `<p class="text-xs text-gray-500 py-6 text-center">취급 중인 품목이 없습니다.</p>`;
+            return;
+        }
+
+        const isClosed = pageIsClosed;
+        container.innerHTML = filteredItems.map(item => {
+            const isAvail = item.isAvailable !== false;
+            const badgeClass = isAvail
+                ? "text-brandAccent bg-green-50 border-brandAccent/20"
+                : "text-red-500 bg-red-50 border-red-200";
+            const badgeText = isAvail ? "공급 중" : "일시 품절";
+            const opacityClass = isAvail ? "" : "opacity-60";
+            const currentQty = selectedItems.get(item.id) || 0;
+
+            let qtyControllerHtml = "";
+            if (!isAvail) {
+                qtyControllerHtml = `<span class="px-2.5 py-1 border rounded-lg text-xs font-bold ${badgeClass}">${badgeText}</span>`;
+            } else if (isClosed) {
+                qtyControllerHtml = `<span class="px-2.5 py-1 bg-gray-100 text-gray-500 border rounded-lg text-xs font-bold">주문 마감</span>`;
+            } else {
+                qtyControllerHtml = `
+                    <div class="flex items-center gap-1 border border-gray-200 rounded-xl p-1 bg-gray-50">
+                        <button type="button" aria-label="${item.name} 수량 줄이기" onclick="changeItemQty('${item.id}', -1)" class="size-11 rounded-lg bg-white border flex items-center justify-center font-bold text-sm shadow-sm active:scale-95 hover:bg-gray-100">-</button>
+                        <input type="number" id="qty-input-${item.id}" aria-label="${item.name} 수량" value="${currentQty}" min="0" oninput="handleItemInputQty('${item.id}', this.value)" onblur="normalizeItemQty('${item.id}', this)" class="w-14 min-h-11 text-center font-bold text-sm text-brandDark bg-transparent border-0 focus:ring-brandDark p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                        <button type="button" aria-label="${item.name} 수량 늘리기" onclick="changeItemQty('${item.id}', 1)" class="size-11 rounded-lg bg-white border flex items-center justify-center font-bold text-sm shadow-sm active:scale-95 hover:bg-gray-100">+</button>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="p-4 border border-gray-100 rounded-xl bg-white flex items-center justify-between hover:shadow-sm transition-all ${opacityClass}">
+                    <div>
+                        <h4 class="font-bold text-gray-900 text-sm">${item.name}</h4>
+                        <p class="text-xs text-gray-500 mt-0.5">단위: ${item.unit}</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        ${qtyControllerHtml}
+                    </div>
+                </div>
+            `;
+        }).join("");
     }
 
     // 카탈로그 리스트 렌더링
-    async function renderPage() {
+    async function renderPage(category = activeCategory) {
+        const renderCategory = category || 'all';
+        const renderSeq = ++catalogRenderSeq;
+        const container = document.getElementById("tiers-container");
+        if (container && !container.children.length) {
+            container.innerHTML = `<p class="text-xs text-gray-400 py-6 text-center">품목을 불러오는 중입니다...</p>`;
+        }
+
         try {
             const items = await BongBongStore.getItems();
-            const container = document.getElementById("tiers-container");
+            if (renderSeq !== catalogRenderSeq) return;
 
-            container.innerHTML = "";
-
-            const filteredItems = activeCategory === 'all'
-                ? items
-                : items.filter(i => i.category === activeCategory);
-
-            if (filteredItems.length === 0) {
-                container.innerHTML = `<p class="text-xs text-gray-500 py-6 text-center">취급 중인 품목이 없습니다.</p>`;
-                return;
-            }
-
-            const isClosed = pageIsClosed;
-
-            filteredItems.forEach(item => {
-                const isAvail = item.isAvailable !== false;
-                const badgeClass = isAvail
-                    ? "text-brandAccent bg-green-50 border-brandAccent/20"
-                    : "text-red-500 bg-red-50 border-red-200";
-                const badgeText = isAvail ? "공급 중" : "일시 품절";
-                const opacityClass = isAvail ? "" : "opacity-60";
-
-                const currentQty = selectedItems.get(item.id) || 0;
-
-                // 수량 조절기 렌더링
-                let qtyControllerHtml = "";
-                if (!isAvail) {
-                    qtyControllerHtml = `<span class="px-2.5 py-1 border rounded-lg text-xs font-bold ${badgeClass}">${badgeText}</span>`;
-                } else if (isClosed) {
-                    qtyControllerHtml = `<span class="px-2.5 py-1 bg-gray-100 text-gray-500 border rounded-lg text-xs font-bold">주문 마감</span>`;
-                } else {
-                    qtyControllerHtml = `
-                        <div class="flex items-center gap-1 border border-gray-200 rounded-xl p-1 bg-gray-50">
-                            <button type="button" aria-label="${item.name} 수량 줄이기" onclick="changeItemQty('${item.id}', -1)" class="size-11 rounded-lg bg-white border flex items-center justify-center font-bold text-sm shadow-sm active:scale-95 hover:bg-gray-100">-</button>
-                            <input type="number" id="qty-input-${item.id}" aria-label="${item.name} 수량" value="${currentQty}" min="0" oninput="handleItemInputQty('${item.id}', this.value)" onblur="normalizeItemQty('${item.id}', this)" class="w-14 min-h-11 text-center font-bold text-sm text-brandDark bg-transparent border-0 focus:ring-brandDark p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                            <button type="button" aria-label="${item.name} 수량 늘리기" onclick="changeItemQty('${item.id}', 1)" class="size-11 rounded-lg bg-white border flex items-center justify-center font-bold text-sm shadow-sm active:scale-95 hover:bg-gray-100">+</button>
-                        </div>
-                    `;
-                }
-
-                const itemHtml = `
-                    <div class="p-4 border border-gray-100 rounded-xl bg-white flex items-center justify-between hover:shadow-sm transition-all ${opacityClass}">
-                        <div>
-                            <h4 class="font-bold text-gray-900 text-sm">${item.name}</h4>
-                            <p class="text-xs text-gray-500 mt-0.5">단위: ${item.unit}</p>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            ${qtyControllerHtml}
-                        </div>
-                    </div>
-                `;
-                container.insertAdjacentHTML("beforeend", itemHtml);
-            });
-
+            renderCatalogItems(items, renderCategory);
             renderPendingOrdersPanel(items);
-
-            // (P3-3) 푸터 입금 계좌를 설정값으로 1회 바인딩 (실패 시 기본값 유지)
-            if (!window.__footerAccountBound) {
-                window.__footerAccountBound = true;
-                try {
-                    const acct = BongBongStore.formatAccount(await BongBongStore.getSettings());
-                    const footEl = document.getElementById("footer-account");
-                    if (footEl) footEl.textContent = `${acct.bankAccount.replace(/-/g, '')} ${acct.holder}`.trim();
-                } catch (e) {
-                    console.error("푸터 계좌 바인딩 실패(기본값 유지):", e);
-                }
-            }
+            bindFooterAccountOnce();
         } catch (err) {
             console.error("Failed to render page:", err);
-            showToast("페이지를 불러오지 못했습니다. 새로고침 해주세요.", "error");
+            if (renderSeq === catalogRenderSeq) {
+                showToast("페이지를 불러오지 못했습니다. 새로고침 해주세요.", "error");
+            }
+        }
+    }
+
+    async function bindFooterAccountOnce() {
+        if (window.__footerAccountBound) return;
+        window.__footerAccountBound = true;
+        try {
+            const acct = BongBongStore.formatAccount(await BongBongStore.getSettings());
+            const footEl = document.getElementById("footer-account");
+            if (footEl) footEl.textContent = `${acct.bankAccount.replace(/-/g, '')} ${acct.holder}`.trim();
+        } catch (e) {
+            console.error("푸터 계좌 바인딩 실패(기본값 유지):", e);
         }
     }
 
