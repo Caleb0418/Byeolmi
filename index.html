@@ -135,7 +135,7 @@
         <div class="flex justify-end md:justify-start gap-2 md:gap-4 md:min-w-[430px]">
             <button id="send-settle-btn" class="flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 min-h-11 md:h-12 rounded-xl bg-secondary text-white font-bold text-xs md:text-sm hover:bg-opacity-90 shadow-md">
                 <span class="material-symbols-outlined text-sm md:text-base">send</span>
-                <span class="hidden sm:inline">정산 알림톡 일괄 발송</span>
+                <span class="hidden sm:inline">정산 알림톡 발송</span>
                 <span class="sm:hidden">알림톡 발송</span>
             </button>
         </div>
@@ -1455,9 +1455,10 @@
                 const pendingQtySub = document.getElementById("pending-qty-sub");
                 const pendingIcon = document.getElementById("kpi-pending-icon");
                 if (sendSettleBtn) {
-                    const shouldDisableSend = pendingCount > 0 || activeOrders.length === 0;
+                    const approvedCount = activeOrders.filter(order => order.status === "승인").length;
+                    const shouldDisableSend = approvedCount === 0;
                     sendSettleBtn.disabled = shouldDisableSend;
-                    sendSettleBtn.title = pendingCount > 0 ? "승인 대기 주문을 먼저 승인해 주세요." : "정산 알림톡 발송";
+                    sendSettleBtn.title = shouldDisableSend ? "승인된 주문이 있을 때 정산 알림톡을 발송할 수 있습니다." : "승인된 주문 정산 알림톡 발송";
                     sendSettleBtn.className = shouldDisableSend
                         ? "flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 min-h-11 md:h-12 rounded-xl bg-gray-200 text-gray-500 font-bold text-xs md:text-sm cursor-not-allowed shadow-none"
                         : "flex items-center justify-center gap-1 md:gap-2 px-3 md:px-6 min-h-11 md:h-12 rounded-xl bg-secondary text-white font-bold text-xs md:text-sm hover:bg-opacity-90 shadow-md";
@@ -1871,13 +1872,7 @@
             try {
                 const items = await BongBongStore.getItems();
                 const orders = (await BongBongStore.getOrders()).filter(order => BongBongStore.isActiveOrder(order));
-                const pendingOrders = orders.filter(order => order.status === "대기");
-                if (pendingOrders.length > 0) {
-                    showToast("승인 대기 주문을 먼저 승인한 뒤 정산 알림톡을 발송해 주세요.", "warning");
-                    return;
-                }
-
-                const billableOrders = orders.filter(order => order.status !== "취소됨");
+                const billableOrders = orders.filter(order => order.status === "승인");
                 const buyerSummary = {};
                 billableOrders.forEach(order => {
                     if (!buyerSummary[order.buyerName]) buyerSummary[order.buyerName] = {};
@@ -1887,7 +1882,7 @@
 
                 const buyersList = Object.keys(buyerSummary);
                 if (buyersList.length === 0) {
-                    showToast("오늘 접수된 발주 건이 없어 정산 알림을 발송할 수 없습니다.", "warning");
+                    showToast("승인된 발주 건이 없어 정산 알림을 발송할 수 없습니다.", "warning");
                     return;
                 }
 
@@ -1903,7 +1898,7 @@
                     for (const [itemId, totalQty] of Object.entries(itemQtyMap)) {
                         const item = items.find(i => i.id === itemId);
                         if (!item) continue;
-                        const finalPrice = effectivePrice(item, buyer, totalQty);
+                        const finalPrice = effectivePrice(item, buyerName, totalQty);
                         const subtotal = totalQty * finalPrice;
                         totalAmount += subtotal;
                         detailList.push({ itemId, qty: totalQty, price: finalPrice });
