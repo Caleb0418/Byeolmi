@@ -483,6 +483,56 @@
             </section>
         </div>
 
+        <!-- Tab 4: Buyers & Custom Pricing View -->
+        <div id="buyers-tab" class="hidden space-y-6">
+            <section class="glass-panel rounded-lg overflow-hidden shadow-sm bg-white">
+                <div class="px-6 py-5 bg-primary text-white flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 class="text-sm font-bold flex items-center gap-1.5">
+                        <span class="material-symbols-outlined font-normal">groups</span>
+                        거래처 접속 승인
+                    </h3>
+                    <span id="buyers-pending-count" class="text-xs font-bold text-white/80">0건</span>
+                </div>
+                <div id="buyers-pending-list" class="p-4 md:p-6 space-y-3">
+                    <div class="flex items-center justify-center gap-2 py-8 text-gray-400 text-sm">
+                        <span class="material-symbols-outlined animate-spin text-base">sync</span>
+                        승인 요청을 불러오는 중...
+                    </div>
+                </div>
+            </section>
+
+            <section class="glass-panel rounded-lg overflow-hidden shadow-sm bg-white">
+                <div class="px-6 py-5 border-b border-gray-100 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-primary flex items-center gap-1.5">
+                            <span class="material-symbols-outlined font-normal">storefront</span>
+                            전체 거래처 및 업체별 전용 단가
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-1">행을 누르면 업체명, 접속 상태, 품목별 전용가를 수정할 수 있습니다.</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse responsive-orders" aria-label="전체 거래처 및 업체별 전용 단가 테이블">
+                        <thead>
+                            <tr class="bg-gray-50 border-b border-gray-200">
+                                <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">거래처</th>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">접속 상태</th>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">업체 전용 단가</th>
+                            </tr>
+                        </thead>
+                        <tbody id="buyers-all-body" class="divide-y divide-gray-100 text-sm">
+                            <tr>
+                                <td colspan="3" class="px-6 py-10 text-center text-gray-400 text-sm">
+                                    <span class="material-symbols-outlined animate-spin align-middle text-base">sync</span>
+                                    <span class="align-middle ml-1">거래처 목록을 불러오는 중...</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
     </div>
 
     <!-- Manual Order Modal -->
@@ -3791,6 +3841,12 @@
             updatePendingApprovalBadge(buyers);
         } catch (err) {
             console.error("Failed to render buyers tab:", err);
+            if (pendingWrap) {
+                pendingWrap.innerHTML = `<p class="text-xs text-red-500 py-6 text-center">승인 요청을 불러오지 못했습니다. DB 연결 또는 권한 설정을 확인해 주세요.</p>`;
+            }
+            if (tableBody) {
+                tableBody.innerHTML = `<tr><td colspan="3" class="px-6 py-8 text-center text-red-500">거래처 목록을 불러오지 못했습니다. DB 연결 또는 권한 설정을 확인해 주세요.</td></tr>`;
+            }
             window.BongBongUI && window.BongBongUI.toast("거래처 목록을 불러오지 못했습니다.");
         }
     }
