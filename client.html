@@ -463,9 +463,11 @@
             document.getElementById("buyer-contact").value = cachedContact;
         }
 
-        await closedStatusPromise;
         await renderPage(initialItemsPromise);
         updateFloatingBar();
+        closedStatusPromise.then(() => {
+            if (pageIsClosed) renderPage();
+        });
 
         // 휴대폰 번호 실시간 하이픈 자동 포맷팅
         const contactInput = document.getElementById("buyer-contact");
