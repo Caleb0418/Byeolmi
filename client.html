@@ -434,57 +434,11 @@
         }
         await checkClosedStatus();
 
-        // 0. Buyer 권한 및 프로필 자동 로드 (비로그인 발주는 입력 허용)
-        async function checkClientAuth() {
-            if (!supabase) return;
-            try {
-                const buyerInput = document.getElementById("buyer-name");
-                const contactInput = document.getElementById("buyer-contact");
-
-                // URL에서 token 파라미터가 제공된 경우 (우선순위 1)
-                const urlParams = new URLSearchParams(window.location.search);
-                const token = urlParams.get('token');
-                if (token) {
-                    const { data: buyerData } = await supabase
-                        .from('buyers')
-                        .select('name, contact')
-                        .eq('id', token)
-                        .maybeSingle();
-                    if (buyerData) {
-                        buyerInput.value = buyerData.name;
-                        buyerInput.disabled = true;
-
-                        if (buyerData.contact) {
-                            const decryptedContact = BongBongCrypt.decrypt(buyerData.contact);
-                            contactInput.value = decryptedContact;
-                            contactInput.disabled = true;
-                        }
-                        return;
-                    }
-                }
-
-                // 기존 로그인 세션이 있는 경우 (우선순위 2)
-                const user = await BongBongAuth.getCurrentUser();
-                if (user) {
-                    const { data } = await supabase
-                        .from('buyers')
-                        .select('name, contact')
-                        .eq('auth_uid', user.id)
-                        .maybeSingle();
-                    if (data && data.name) {
-                        buyerInput.value = data.name;
-                        buyerInput.disabled = true;
-
-                        if (data.contact) {
-                            const decryptedContact = BongBongCrypt.decrypt(data.contact);
-                            contactInput.value = decryptedContact;
-                            contactInput.disabled = true;
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error("Auth check failed:", err);
-            }
+        // 0. 승인된 카카오 거래처만 주문 화면에 진입시킨다.
+        const access = await resolveAccess();
+        if (access.state !== "approved") {
+            showAccessGate(access);
+            return;
         }
         applyApprovedBuyer(access.buyer);
 
@@ -1148,7 +1102,7 @@
     // ── 접속 승인제 게이트 ──────────────────────────────────────────────
     // 로그인/승인 상태를 판정한다. 반환 state: 'login' | 'pending' | 'blocked' | 'approved'
     async function resolveAccess() {
-        if (!supabase) return { state: "approved", buyer: null }; // DB 미연결 시 게이트 무력화(개발 안전)
+        if (!supabase) return { state: "login", buyer: null }; // 인증 클라이언트가 없으면 주문 화면을 열지 않는다.
         try {
             const user = await BongBongAuth.getCurrentUser();
             if (!user) return { state: "login" };
