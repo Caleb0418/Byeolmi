@@ -33,7 +33,7 @@ if (window.z) {
 
     ItemSchema = z.object({
         id: z.string().min(1, "아이디는 필수입니다."),
-        category: z.enum(["fresh", "easy", "snack", "living"]),
+        category: z.string().min(1, "카테고리는 필수입니다.").max(40, "카테고리는 40자 이하로 입력해 주세요."),
         name: z.string().min(1, "품목명은 필수입니다."),
         basePrice: z.number().int().positive("기본 단가는 양의 정수여야 합니다."),
         unit: z.string().min(1, "단위는 필수입니다."),
@@ -71,13 +71,42 @@ if (window.z) {
     });
 }
 
-// 1. 카테고리 정의
+// 1. 기본 카테고리 정의 + 사용자 정의 분류 헬퍼
 const CATEGORIES = [
     { id: "fresh", name: "신선식품" },
     { id: "easy", name: "간편조리" },
     { id: "snack", name: "간식" },
     { id: "living", name: "생활용품" }
 ];
+
+function normalizeCategoryValue(value) {
+    return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function getCategoryId(value) {
+    const normalized = normalizeCategoryValue(value);
+    if (!normalized) return "";
+    const matched = CATEGORIES.find(category => category.id === normalized || category.name === normalized);
+    return matched ? matched.id : normalized;
+}
+
+function getCategoryLabel(value) {
+    const categoryId = getCategoryId(value);
+    const matched = CATEGORIES.find(category => category.id === categoryId);
+    return matched ? matched.name : categoryId;
+}
+
+function buildCategoryOptions(items = [], options = {}) {
+    const map = new Map();
+    if (options.includeDefaults) {
+        CATEGORIES.forEach(category => map.set(category.id, category.name));
+    }
+    (items || []).forEach(item => {
+        const categoryId = getCategoryId(item && item.category);
+        if (categoryId) map.set(categoryId, getCategoryLabel(categoryId));
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+}
 
 // 분석 기본 빈 구조 (실데이터가 없거나 조회 실패 시 폴백)
 // 주의(P1-3): 기존의 하드코딩 더미 매출/거래처 값은 실제처럼 오인될 수 있어 제거했다.
@@ -91,8 +120,16 @@ const ANALYTICS_DATA = {
 
 // LocalStorage 및 Supabase 통합 입출력 제어 클래스
 class BongBongStore {
-    static getCategories() {
-        return CATEGORIES;
+    static getCategories(items = [], options = {}) {
+        return buildCategoryOptions(items, options);
+    }
+
+    static getCategoryId(value) {
+        return getCategoryId(value);
+    }
+
+    static getCategoryLabel(value) {
+        return getCategoryLabel(value);
     }
 
     static clearItemsCache() {
@@ -118,6 +155,7 @@ class BongBongStore {
             return data.map(item => ({
                 id: item.id,
                 category: item.category,
+                categoryLabel: getCategoryLabel(item.category),
                 name: item.name,
                 basePrice: item.base_price,
                 unit: item.unit,
@@ -138,18 +176,19 @@ class BongBongStore {
     }
 
     static async addItem(item) {
+        const normalizedItem = { ...item, category: getCategoryId(item.category) };
         if (ItemSchema) {
-            ItemSchema.parse(item);
+            ItemSchema.parse(normalizedItem);
         }
         if (!supabase) return;
 
         const dbItem = {
-            id: item.id,
-            category: item.category,
-            name: item.name,
-            base_price: item.basePrice,
-            unit: item.unit,
-            is_available: item.isAvailable !== false
+            id: normalizedItem.id,
+            category: normalizedItem.category,
+            name: normalizedItem.name,
+            base_price: normalizedItem.basePrice,
+            unit: normalizedItem.unit,
+            is_available: normalizedItem.isAvailable !== false
         };
 
         const { error: itemError } = await supabase
@@ -161,9 +200,9 @@ class BongBongStore {
             throw new Error(itemError.message);
         }
         this.clearItemsCache();
-        if (item.tiers && item.tiers.length > 0) {
-            const dbTiers = item.tiers.map(t => ({
-                item_id: item.id,
+        if (normalizedItem.tiers && normalizedItem.tiers.length > 0) {
+            const dbTiers = normalizedItem.tiers.map(t => ({
+                item_id: normalizedItem.id,
                 threshold: t.threshold,
                 price: t.price
             }));
@@ -185,6 +224,7 @@ class BongBongStore {
         const items = await this.getItems();
         const existingItem = items.find(item => item.id === itemId);
         const newItem = { ...existingItem, ...updatedItem };
+        newItem.category = getCategoryId(newItem.category);
         if (ItemSchema) {
             ItemSchema.parse(newItem);
         }
@@ -1426,6 +1466,7 @@ class BongBongCalculator {
 
 window.BongBongStore = BongBongStore;
 window.BongBongCalculator = BongBongCalculator;
+window.BongBongCategories = { getCategoryId, getCategoryLabel, buildCategoryOptions };
 
 // B2B 사용자 카카오 OAuth 인증 관리자 클래스
 class BongBongAuth {
@@ -1571,6 +1612,9 @@ if (typeof module !== 'undefined' && module.exports) {
         BongBongAuth,
         BongBongCrypt,
         BongBongUI,
-        CATEGORIES
+        CATEGORIES,
+        getCategoryId,
+        getCategoryLabel,
+        buildCategoryOptions
     };
 }
