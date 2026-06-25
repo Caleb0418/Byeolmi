@@ -95,29 +95,46 @@ class BongBongStore {
         return CATEGORIES;
     }
 
+    static clearItemsCache() {
+        this._itemsCache = null;
+        this._itemsPromise = null;
+    }
+
     static async getItems() {
         if (!supabase) return [];
-        const { data, error } = await supabase
-            .from('items')
-            .select('*, item_tiers(*)');
+        if (this._itemsCache) return this._itemsCache;
+        if (this._itemsPromise) return this._itemsPromise;
 
-        if (error) {
-            console.error("Failed to fetch items:", error);
-            throw new Error(error.message);
+        this._itemsPromise = (async () => {
+            const { data, error } = await supabase
+                .from('items')
+                .select('*, item_tiers(*)');
+
+            if (error) {
+                console.error("Failed to fetch items:", error);
+                throw new Error(error.message);
+            }
+
+            return data.map(item => ({
+                id: item.id,
+                category: item.category,
+                name: item.name,
+                basePrice: item.base_price,
+                unit: item.unit,
+                isAvailable: item.is_available,
+                tiers: (item.item_tiers || []).map(t => ({
+                    threshold: t.threshold,
+                    price: t.price
+                }))
+            }));
+        })();
+
+        try {
+            this._itemsCache = await this._itemsPromise;
+            return this._itemsCache;
+        } finally {
+            this._itemsPromise = null;
         }
-
-        return data.map(item => ({
-            id: item.id,
-            category: item.category,
-            name: item.name,
-            basePrice: item.base_price,
-            unit: item.unit,
-            isAvailable: item.is_available,
-            tiers: (item.item_tiers || []).map(t => ({
-                threshold: t.threshold,
-                price: t.price
-            }))
-        }));
     }
 
     static async addItem(item) {
@@ -143,7 +160,7 @@ class BongBongStore {
             console.error("Failed to add item:", itemError);
             throw new Error(itemError.message);
         }
-
+        this.clearItemsCache();
         if (item.tiers && item.tiers.length > 0) {
             const dbTiers = item.tiers.map(t => ({
                 item_id: item.id,
@@ -214,7 +231,7 @@ class BongBongStore {
                 throw new Error(insertTiersError.message);
             }
         }
-
+        this.clearItemsCache();
         this.dispatchStorageChange();
     }
 
@@ -229,6 +246,7 @@ class BongBongStore {
             console.error("Failed to delete item:", error);
             throw new Error(error.message);
         }
+        this.clearItemsCache();
         this.dispatchStorageChange();
     }
 

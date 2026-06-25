@@ -437,7 +437,11 @@
                 console.error("Failed to check closed status:", err);
             }
         }
-        await checkClosedStatus();
+        const closedStatusPromise = checkClosedStatus();
+        const initialItemsPromise = BongBongStore.getItems().catch(err => {
+            console.error("Initial item prefetch failed:", err);
+            return null;
+        });
 
         // 0. 승인된 카카오 거래처만 주문 화면에 진입시킨다.
         const access = await resolveAccess();
@@ -459,7 +463,8 @@
             document.getElementById("buyer-contact").value = cachedContact;
         }
 
-        await renderPage();
+        await closedStatusPromise;
+        await renderPage(initialItemsPromise);
         updateFloatingBar();
 
         // 휴대폰 번호 실시간 하이픈 자동 포맷팅
@@ -489,6 +494,7 @@
                     'postgres_changes',
                     { event: '*', schema: 'public', table: 'items' },
                     async () => {
+                        BongBongStore.clearItemsCache?.();
                         await renderPage();
                     }
                 )
@@ -527,9 +533,10 @@
     }
 
     // 카탈로그 리스트 렌더링
-    async function renderPage() {
+    async function renderPage(itemsSource = null) {
         try {
-            const items = await BongBongStore.getItems();
+            const prefetchedItems = itemsSource ? await itemsSource : null;
+            const items = prefetchedItems || await BongBongStore.getItems();
             const container = document.getElementById("tiers-container");
 
             container.innerHTML = "";
