@@ -143,6 +143,11 @@
         // Query Params
         const params = new URLSearchParams(window.location.search);
         const buyer = params.get("buyer");
+        const orderIdsParam = params.get("orderIds") || "";
+        const selectedOrderIds = orderIdsParam
+            .split(",")
+            .map(id => Number(id))
+            .filter(Boolean);
 
         if (!buyer) {
             document.getElementById("buyer-title").textContent = "손님 대표님";
@@ -178,6 +183,7 @@
             const itemQtyMap = {};
             const buyerPayStatuses = [];
             orders.filter(o => BongBongStore.isActiveOrder(o)).forEach(o => {
+                if (selectedOrderIds.length > 0 && !selectedOrderIds.includes(Number(o.id))) return;
                 if (o.buyerName === buyer) {
                     if (!itemQtyMap[o.itemId]) {
                         itemQtyMap[o.itemId] = 0;
