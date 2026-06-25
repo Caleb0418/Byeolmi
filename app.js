@@ -542,6 +542,32 @@ class BongBongStore {
         }));
     }
 
+
+    static async getMyOrders() {
+        if (!supabase) return [];
+        const buyer = await this.getMyBuyer();
+        if (!buyer || !buyer.id) return [];
+        const { data, error } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('buyer_id', buyer.id)
+            .order('created_at', { ascending: false });
+        if (error) {
+            console.error("Failed to fetch my orders:", error);
+            throw new Error(error.message);
+        }
+        return (data || []).map(order => ({
+            id: order.id,
+            buyerName: order.buyer_name,
+            itemId: order.item_id,
+            qty: order.qty,
+            time: order.time,
+            status: order.status,
+            paymentStatus: order.payment_status || '미수금',
+            createdAt: order.created_at
+        }));
+    }
+
     static async updateOrdersForBuyer(originalOrderIds, buyerName, buyerContact, selectedItems) {
         const existingOrders = (await this.getOrders()).filter(order => originalOrderIds.includes(order.id));
         const existingByItem = {};
