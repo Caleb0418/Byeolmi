@@ -82,17 +82,8 @@
             ⚠️ 금일 도매 주문 접수가 종료되었습니다.
         </div>
 
-        <!-- STEP 1: Product Selection -->
-        <div id="step-1" class="step-container space-y-6">
-            <!-- 4-Category Slider -->
-            <nav class="flex gap-6 overflow-x-auto no-scrollbar border-b border-gray-50 pb-3 px-2 text-sm font-semibold">
-                <button onclick="filterCategory('all')" id="cat-all" class="min-h-11 min-w-11 px-2 text-brandDark border-b-2 border-brandDark pb-1 shrink-0">전체보기</button>
-                <button onclick="filterCategory('fresh')" id="cat-fresh" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">신선식품</button>
-                <button onclick="filterCategory('easy')" id="cat-easy" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">간편조리</button>
-                <button onclick="filterCategory('snack')" id="cat-snack" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">간식</button>
-                <button onclick="filterCategory('living')" id="cat-living" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">생활용품</button>
-            </nav>
-
+        <!-- HOME: current order summary -->
+        <section id="home-view" class="space-y-6 pb-24">
             <section id="pending-orders-section" class="hidden rounded-xl border border-amber-100 bg-amber-50 p-4 space-y-3" aria-labelledby="pending-orders-title">
                 <div class="flex items-start justify-between gap-3">
                     <div>
@@ -112,6 +103,22 @@
                     <span class="material-symbols-outlined text-8xl">local_mall</span>
                 </div>
             </div>
+
+            <button type="button" onclick="showProducts()" class="w-full min-h-12 rounded-xl bg-brandDark text-sm font-bold text-white shadow-sm hover:bg-black flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-sm">storefront</span>
+                상품 보러가기
+            </button>
+        </section>
+        <!-- STEP 1: Product Selection -->
+        <div id="step-1" class="step-container hidden space-y-6">
+            <!-- 4-Category Slider -->
+            <nav class="flex gap-6 overflow-x-auto no-scrollbar border-b border-gray-50 pb-3 px-2 text-sm font-semibold">
+                <button onclick="filterCategory('all')" id="cat-all" class="min-h-11 min-w-11 px-2 text-brandDark border-b-2 border-brandDark pb-1 shrink-0">전체보기</button>
+                <button onclick="filterCategory('fresh')" id="cat-fresh" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">신선식품</button>
+                <button onclick="filterCategory('easy')" id="cat-easy" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">간편조리</button>
+                <button onclick="filterCategory('snack')" id="cat-snack" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">간식</button>
+                <button onclick="filterCategory('living')" id="cat-living" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">생활용품</button>
+            </nav>
 
             <!-- Dynamic Product Catalog List (No Tiers, No Price Info) -->
             <section class="space-y-4">
@@ -233,13 +240,36 @@
 
         <!-- ORDER DETAIL: Status timeline -->
         <section id="order-detail-view" class="hidden space-y-5 pb-24"></section>
+
+        <!-- PROFILE: buyer account summary -->
+        <section id="profile-view" class="hidden space-y-5 pb-24">
+            <div class="space-y-1">
+                <h2 class="font-serif text-lg font-bold text-brandDark">내 정보</h2>
+                <p class="text-xs text-gray-500">발주에 사용되는 거래처 정보를 확인합니다.</p>
+            </div>
+            <div class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
+                <div>
+                    <p class="text-xs font-bold text-gray-500">거래처명</p>
+                    <p id="profile-buyer-name" class="mt-1 text-sm font-bold text-gray-900">-</p>
+                </div>
+                <div>
+                    <p class="text-xs font-bold text-gray-500">연락처</p>
+                    <p id="profile-buyer-contact" class="mt-1 text-sm font-bold text-gray-900">-</p>
+                </div>
+                <button type="button" onclick="showProducts()" class="w-full min-h-11 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 hover:bg-gray-50">상품 보러가기</button>
+            </div>
+        </section>
     </main>
 
     <!-- Buyer Bottom Navigation -->
-    <nav id="buyer-bottom-nav" class="fixed bottom-0 left-1/2 z-50 grid w-full max-w-[480px] -translate-x-1/2 grid-cols-3 border-t border-gray-100 bg-white/95 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.04)] backdrop-blur" aria-label="구매자 하단 메뉴">
-        <button type="button" id="nav-order" onclick="showOrderHome()" class="min-h-12 rounded-xl text-xs font-bold text-brandDark flex flex-col items-center justify-center gap-0.5">
-            <span class="material-symbols-outlined text-xl">shopping_bag</span>
-            주문하기
+    <nav id="buyer-bottom-nav" class="fixed bottom-0 left-1/2 z-50 grid w-full max-w-[480px] -translate-x-1/2 grid-cols-4 border-t border-gray-100 bg-white/95 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.04)] backdrop-blur" aria-label="구매자 하단 메뉴">
+        <button type="button" id="nav-home" onclick="showHome()" class="min-h-12 rounded-xl text-xs font-bold text-brandDark flex flex-col items-center justify-center gap-0.5">
+            <span class="material-symbols-outlined text-xl">home</span>
+            홈
+        </button>
+        <button type="button" id="nav-products" onclick="showProducts()" class="min-h-12 rounded-xl text-xs font-bold text-gray-500 flex flex-col items-center justify-center gap-0.5">
+            <span class="material-symbols-outlined text-xl">storefront</span>
+            상품
         </button>
         <button type="button" id="nav-my-orders" onclick="showMyOrders()" class="min-h-12 rounded-xl text-xs font-bold text-gray-500 flex flex-col items-center justify-center gap-0.5">
             <span class="material-symbols-outlined text-xl">receipt_long</span>
@@ -351,7 +381,7 @@
     let isEditingSubmittedOrder = false;
     let pageIsClosed = false;
     let profileComplete = false;
-    let currentView = "order";
+    let currentView = "home";
     let activeMyOrdersFilter = "all";
     let currentDetailOrderKey = null;
     const latestMyOrderGroups = new Map();
@@ -492,7 +522,7 @@
         }
 
         await renderPage('all');
-        updateFloatingBar();
+        await showHome();
         closedStatusPromise.then(() => {
             if (pageIsClosed) renderPage();
         });
@@ -713,7 +743,7 @@
         const floatingBar = document.getElementById("floating-bar");
         const summaryText = document.getElementById("selected-summary-txt");
         if (!floatingBar || !summaryText) return;
-        if (currentView !== "order" || currentStep !== 1) {
+        if (currentView !== "products" || currentStep !== 1) {
             floatingBar.classList.add("hidden");
             return;
         }
@@ -749,10 +779,10 @@
     // 단계별 위저드 이동 제어
     window.goToStep = async function(stepNumber) {
         currentStep = stepNumber;
-        currentView = "order";
+        currentView = "products";
         currentDetailOrderKey = null;
         hideClientSubViews();
-        setBottomNavActive("order");
+        setBottomNavActive("products");
         document.getElementById("buyer-bottom-nav")?.classList.toggle("hidden", stepNumber !== 1);
 
         const step1 = document.getElementById("step-1");
@@ -798,7 +828,7 @@
             return;
         }
         if (currentView === "myOrders") {
-            showOrderHome();
+            showHome();
             return;
         }
         if (currentStep === 1) {
@@ -1079,7 +1109,7 @@
     }
 
     function setBottomNavActive(activeId) {
-        ["order", "my-orders", "profile"].forEach(id => {
+        ["home", "products", "my-orders", "profile"].forEach(id => {
             const btn = document.getElementById(`nav-${id}`);
             if (!btn) return;
             const isActive = id === activeId;
@@ -1090,8 +1120,10 @@
     }
 
     function hideClientSubViews() {
+        document.getElementById("home-view")?.classList.add("hidden");
         document.getElementById("my-orders-view")?.classList.add("hidden");
         document.getElementById("order-detail-view")?.classList.add("hidden");
+        document.getElementById("profile-view")?.classList.add("hidden");
     }
 
     function showOrderStepContainers(show) {
@@ -1107,18 +1139,46 @@
         if (backBtn) backBtn.classList.toggle("invisible", !canGoBack);
     }
 
-    window.showOrderHome = async function() {
-        currentView = "order";
+    window.showHome = async function() {
+        currentView = "home";
+        currentDetailOrderKey = null;
+        showOrderStepContainers(false);
+        hideClientSubViews();
+        document.getElementById("floating-bar")?.classList.add("hidden");
+        document.getElementById("home-view")?.classList.remove("hidden");
+        document.getElementById("buyer-bottom-nav")?.classList.remove("hidden");
+        setHeaderForView("홈", "별미집", false);
+        setBottomNavActive("home");
+        await renderPendingOrdersPanel(await BongBongStore.getItems());
+    };
+
+    window.showProducts = async function() {
+        currentView = "products";
         currentDetailOrderKey = null;
         hideClientSubViews();
-        setBottomNavActive("order");
         document.getElementById("buyer-bottom-nav")?.classList.remove("hidden");
+        setBottomNavActive("products");
         await goToStep(1);
     };
 
+    window.showOrderHome = window.showProducts;
+
     window.showBuyerProfile = function() {
-        showToast("내 정보 화면은 다음 단계에서 연결할 예정입니다.", "info");
-        setBottomNavActive(currentView === "myOrders" || currentView === "orderDetail" ? "my-orders" : "order");
+        currentView = "profile";
+        currentDetailOrderKey = null;
+        showOrderStepContainers(false);
+        hideClientSubViews();
+        document.getElementById("floating-bar")?.classList.add("hidden");
+        document.getElementById("profile-view")?.classList.remove("hidden");
+        document.getElementById("buyer-bottom-nav")?.classList.remove("hidden");
+        const name = document.getElementById("buyer-name")?.value || "-";
+        const contact = document.getElementById("buyer-contact")?.value || "-";
+        const nameEl = document.getElementById("profile-buyer-name");
+        const contactEl = document.getElementById("profile-buyer-contact");
+        if (nameEl) nameEl.textContent = name;
+        if (contactEl) contactEl.textContent = contact;
+        setHeaderForView("내 정보", "내 정보", true);
+        setBottomNavActive("profile");
     };
 
     window.showMyOrders = async function(filter = activeMyOrdersFilter) {
@@ -1152,7 +1212,6 @@
         setBottomNavActive("my-orders");
         await renderOrderDetail(groupKey);
     };
-
     function renderMyOrdersFilterButtons() {
         ["all", "progress", "complete", "cancelled"].forEach(filter => {
             const btn = document.getElementById(`my-orders-filter-${filter}`);
@@ -1374,7 +1433,7 @@
             if (lastSubmittedOrderIds.length === 0) lastSubmittedOrderSnapshot = null;
             showToast("승인 전 주문이 취소되었습니다.", "success");
             await renderPage();
-            if (currentView === "order") updateFloatingBar();
+            if (currentView === "products") updateFloatingBar();
         } catch (err) {
             showToast("주문 취소 중 오류가 발생했습니다: " + err.message, "error");
         }
