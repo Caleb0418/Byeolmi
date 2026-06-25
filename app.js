@@ -67,7 +67,7 @@ if (window.z) {
         itemId: z.string().min(1, "품목을 선택해 주세요."),
         qty: z.number().int().positive("발주 수량은 1개 이상이어야 합니다."),
         time: z.string().optional(),
-        status: z.enum(["대기", "승인", "배송중", "완료"]).optional()
+        status: z.enum(["대기", "승인", "배송중", "완료", "취소됨"]).optional()
     });
 }
 
@@ -486,6 +486,42 @@ class BongBongStore {
     }
     static async cancelOrder(orderId) {
         return this.updateOrderStatus(orderId, '취소됨');
+    }
+
+    static async cancelMyPendingOrder(orderId) {
+        if (!supabase) return;
+        const { error } = await supabase.rpc('cancel_my_pending_order', { p_order_id: orderId });
+        if (error) {
+            console.error("Failed to cancel pending order:", error);
+            throw new Error(error.message);
+        }
+        this.dispatchStorageChange();
+    }
+
+    static async getMyPendingOrders() {
+        if (!supabase) return [];
+        const buyer = await this.getMyBuyer();
+        if (!buyer || !buyer.id) return [];
+        const { data, error } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('buyer_id', buyer.id)
+            .eq('status', '대기')
+            .order('created_at', { ascending: false });
+        if (error) {
+            console.error("Failed to fetch my pending orders:", error);
+            throw new Error(error.message);
+        }
+        return (data || []).map(order => ({
+            id: order.id,
+            buyerName: order.buyer_name,
+            itemId: order.item_id,
+            qty: order.qty,
+            time: order.time,
+            status: order.status,
+            paymentStatus: order.payment_status || '미수금',
+            createdAt: order.created_at
+        }));
     }
 
     static async updateOrdersForBuyer(originalOrderIds, buyerName, buyerContact, selectedItems) {
