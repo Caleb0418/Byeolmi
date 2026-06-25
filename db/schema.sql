@@ -35,17 +35,17 @@ create table buyers (
 
 -- 주문 테이블
 create table orders (
-  id         bigint generated always as identity primary key,
-  buyer_id   uuid references buyers(id),
-  buyer_name text not null,                            -- 기존 호환용 대표자/업체명
-  item_id    text not null references items(id),
-  qty        integer not null check (qty > 0),
-  status     text not null default '대기'
-             check (status in ('대기','승인','배송중','완료')),
+  id             bigint generated always as identity primary key,
+  buyer_id       uuid references buyers(id),
+  buyer_name     text not null,                            -- 기존 호환용 대표자/업체명
+  item_id        text not null references items(id),
+  qty            integer not null check (qty > 0),
+  status         text not null default '대기'
+                 check (status in ('대기','승인','배송중','완료','취소됨')),
   payment_status text not null default '미수금'         -- 수금 상태 (대시보드 정산 관리)
                  check (payment_status in ('미수금','수금완료')),
-  time       text not null,                            -- 주문 시각 (예: '14:30')
-  created_at timestamptz not null default now()
+  time           text not null,                            -- 주문 시각 (예: '14:30')
+  created_at     timestamptz not null default now()
 );
 
 -- 일자별/거래처별 정산 스냅샷 (마감 시 생성)
@@ -61,6 +61,8 @@ create table settlements (
                  check (payment_status in ('미수금','수금완료')),
   sent_at        timestamptz,
   error_message  text,                                 -- 알림톡 발송 실패 사유
+  payment_status text not null default '미수금'
+                 check (payment_status in ('미수금','수금완료')),
   created_at     timestamptz not null default now()
 );
 
@@ -537,3 +539,5 @@ insert into orders (buyer_id, buyer_name, item_id, qty, status, time) values
 ('c0e829c6-6a7e-4b46-a7c5-ae4de4060ef3', '이정재 (대형유통)', 'potato', 25, '대기', '12:05')
 on conflict do nothing;
 
+-- 5-5. approved_owners 초기 사장님 1명 시드 등록
+insert into approved_owners (email) values ('willy0418@naver.com') on conflict (email) do nothing;

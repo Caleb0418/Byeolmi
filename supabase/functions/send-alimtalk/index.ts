@@ -22,18 +22,7 @@ const corsHeaders = {
 function getSolapiHeaders() {
   const date = new Date().toISOString();
   const salt = Math.random().toString(36).substring(2, 12);
-  
-  // HMAC SHA256 Signature
-  // Deno Web Crypto API 활용
-  const data = date + salt;
-  const encoder = new TextEncoder();
-  const keyBuf = encoder.encode(SOLAPI_API_SECRET);
-  const dataBuf = encoder.encode(data);
-  
-  // We can also use simple HMAC signature or standard library
-  // For simplicity and robust runtime execution in Deno:
-  // Solapi signature is: hmac_sha256(secret, date + salt)
-  // Let's implement it using WebCrypto
+
   return {
     date,
     salt,
@@ -45,7 +34,7 @@ async function getAuthHeaderValue(date: string, salt: string) {
   const encoder = new TextEncoder();
   const keyBuf = encoder.encode(SOLAPI_API_SECRET);
   const dataBuf = encoder.encode(date + salt);
-  
+
   const key = await crypto.subtle.importKey(
     "raw",
     keyBuf,
@@ -53,11 +42,11 @@ async function getAuthHeaderValue(date: string, salt: string) {
     false,
     ["sign"]
   );
-  
+
   const sigBuf = await crypto.subtle.sign("HMAC", key, dataBuf);
   const sigArray = Array.from(new Uint8Array(sigBuf));
   const signature = sigArray.map(b => b.toString(16).padStart(2, "0")).join("");
-  
+
   return `HMAC-SHA256 apiKey=${SOLAPI_API_KEY}, date=${date}, salt=${salt}, signature=${signature}`;
 }
 
@@ -68,7 +57,16 @@ serve(async (req) => {
   }
 
   try {
-    const { buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl, type = "settlement" } = await req.json();
+    const {
+      buyerName,
+      contact,
+      totalAmount,
+      itemsDetailSummary,
+      invoiceUrl,
+      type = "settlement",
+      templateId: requestedTemplateId,
+      customMessage,
+    } = await req.json();
 
     // 타입별 필수 파라미터 검증
     // - settlement(정산 요청): buyerName, contact, totalAmount 필수
@@ -95,13 +93,14 @@ serve(async (req) => {
     const { date, salt } = getSolapiHeaders();
     const authorization = await getAuthHeaderValue(date, salt);
 
-    // 2. 알림톡 발송 양식 (타입별 문구/템플릿 구성)
+    // 2. 알림톡 발송 양식 (타입별 문구/템플릿 구성, 프리뷰 편집 문구 우선)
     let messageBody: string;
-    let templateId: string;
+    const templateId = requestedTemplateId || (isOrderConfirm ? SOLAPI_ORDER_TEMPLATE_ID : SOLAPI_TEMPLATE_ID);
     const kakaoButtons: Array<Record<string, string>> = [];
 
-    if (isOrderConfirm) {
-      // (P1-2) 발주 접수 확인 알림톡
+    if (customMessage) {
+      messageBody = customMessage;
+    } else if (isOrderConfirm) {
       messageBody = `[별미집 발주 접수 안내]
 
 안녕하세요, ${buyerName} 대표님.
@@ -112,9 +111,7 @@ ${itemsDetailSummary}
 
 당일 공구 마감 후 확정 단가가 적용된 정산 명세서를 다시 보내드립니다.
 감사합니다.`;
-      templateId = SOLAPI_ORDER_TEMPLATE_ID;
     } else {
-      // 정산 요청 알림톡 (기존 동작)
       messageBody = `[별미집 정산 요청 안내]
 
 안녕하세요, ${buyerName} 대표님.
@@ -127,7 +124,6 @@ ${itemsDetailSummary}
 ■ 입금 계좌: ${BANK_INFO}
 
 아래 버튼을 눌러 상세 정산 명세서(송금계좌 및 금액)를 확인해 주시기 바랍니다.`;
-      templateId = SOLAPI_TEMPLATE_ID;
       if (invoiceUrl) {
         kakaoButtons.push({
           buttonType: "WL", // 웹링크 버튼
@@ -140,7 +136,7 @@ ${itemsDetailSummary}
 
     const kakaoOptions: Record<string, unknown> = {
       pfId: SOLAPI_PFID,
-      templateId: templateId,
+      templateId,
     };
     if (kakaoButtons.length > 0) {
       kakaoOptions.buttons = kakaoButtons;
@@ -153,7 +149,7 @@ ${itemsDetailSummary}
           from: SOLAPI_SENDER_NUMBER,
           text: messageBody,
           type: "ATA", // 알림톡 타입 ATA
-          kakaoOptions: kakaoOptions,
+          kakaoOptions,
         }
       ]
     };
@@ -184,7 +180,8 @@ ${itemsDetailSummary}
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: err.message }), {
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ success: false, error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

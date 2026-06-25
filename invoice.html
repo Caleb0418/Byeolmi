@@ -13,26 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#002045',
-                        secondary: '#0a6c44',
-                        brandDark: '#111111',
-                        brandAccent: '#0a6c44',
-                        neutralBg: '#f8f9fa'
-                    },
-                    fontFamily: {
-                        serif: ['Noto Serif KR', 'Georgia', 'serif'],
-                        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif']
-                    }
-                }
-            }
-        }
-    </script>
+    <link href="dist/tailwind.css" rel="stylesheet">
     <style>
         /* (P2-4) 접근성: 키보드 포커스 가시성 + 모션 민감 사용자 배려 */
         :focus-visible {
@@ -63,42 +44,43 @@
     </style>
 </head>
 <body class="text-brandDark font-sans">
+<div id="app-toast" class="hidden fixed top-4 left-4 right-4 z-[70] mx-auto max-w-[440px] rounded-xl border px-4 py-3 text-sm font-bold shadow-sm" role="status" aria-live="polite"></div>
 
 <div class="app-container p-6 flex flex-col justify-between">
-    
+
     <!-- Top Receipt Card -->
     <div class="space-y-6">
         <!-- Header -->
         <div class="text-center pb-6 border-b-2 border-dashed border-gray-200">
             <span class="text-xs tracking-widest text-brandAccent font-bold block mb-1">WHOLESALE INVOICE</span>
-            <h1 class="font-serif text-2xl font-bold tracking-tight text-primary">별미집 정산 명세서</h1>
-            <p class="text-[10px] text-gray-400 mt-2 font-mono" id="invoice-date">DATE: --.--.--</p>
+            <h1 class="font-serif text-2xl font-bold tracking-tight text-brandDark">별미집 정산 명세서</h1>
+            <p class="text-xs text-gray-500 mt-2 font-mono" id="invoice-date">DATE: --.--.--</p>
         </div>
 
         <!-- Info Area -->
         <div class="space-y-2 text-xs">
             <div class="flex justify-between">
-                <span class="text-gray-400 font-bold">수신 거래처</span>
+                <span class="text-gray-500 font-bold">수신 거래처</span>
                 <span class="font-bold text-gray-900" id="buyer-title">-- 대표님</span>
             </div>
             <div class="flex justify-between">
-                <span class="text-gray-400 font-bold">정산 상태</span>
+                <span class="text-gray-500 font-bold">정산 상태</span>
                 <span class="px-2 py-0.5 rounded text-xs font-bold bg-yellow-50 text-yellow-700 border border-yellow-200" id="payment-status">입금 대기</span>
             </div>
             <div class="flex justify-between">
-                <span class="text-gray-400 font-bold">발행처</span>
-                <span class="text-gray-900">별미집 (샘플(테스트))</span>
+                <span class="text-gray-500 font-bold">발행처</span>
+                <span class="text-gray-900">별미집 (우모유통)</span>
             </div>
         </div>
 
         <!-- Invoice Table -->
         <div class="border-t border-b border-gray-100 py-4">
-            <h3 class="font-bold text-xs text-gray-400 mb-3 uppercase tracking-wider">주문 정산 내역</h3>
-            
+            <h3 class="font-bold text-xs text-gray-500 mb-3 uppercase tracking-wider">주문 정산 내역</h3>
+
             <div class="overflow-x-auto">
                 <table class="w-full text-xs text-left border-collapse">
                     <thead>
-                        <tr class="border-b border-gray-100 pb-2 text-[10px] text-gray-400 uppercase font-bold">
+                        <tr class="border-b border-gray-100 pb-2 text-xs text-gray-500 uppercase font-bold">
                             <th class="py-2">품목</th>
                             <th class="py-2 text-center">수량</th>
                             <th class="py-2 text-right">도매 단가</th>
@@ -113,10 +95,10 @@
         </div>
 
         <!-- Total Bill -->
-        <div class="bg-neutralBg rounded-2xl p-5 flex justify-between items-center border border-gray-100">
+        <div class="bg-neutralBg rounded-xl p-5 flex justify-between items-center border border-gray-100">
             <div>
-                <span class="text-xs font-bold text-gray-400 uppercase">최종 합계 청구액</span>
-                <p class="text-xs text-gray-400 mt-0.5">※ 수량별 도매 혜택 단가 적용됨</p>
+                <span class="text-xs font-bold text-gray-500 uppercase">최종 합계 청구액</span>
+                <p class="text-xs text-gray-500 mt-0.5">※ 수량별 도매 혜택 단가 적용됨</p>
             </div>
             <div class="text-right">
                 <span class="text-xl font-extrabold text-brandDark" id="invoice-total">₩0</span>
@@ -124,26 +106,26 @@
         </div>
 
         <!-- Bank Account -->
-        <div class="border border-gray-200/80 rounded-2xl p-5 space-y-3 relative overflow-hidden bg-white">
-            <span class="text-xs font-extrabold text-gray-400 uppercase block">무통장 결제 계좌 정보</span>
+        <div class="border border-gray-200/80 rounded-xl p-5 space-y-3 relative overflow-hidden bg-white">
+            <span class="text-xs font-extrabold text-gray-500 uppercase block">무통장 결제 계좌 정보</span>
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-xs font-bold text-gray-800" id="bank-info">국민은행 000-0000-0000-00</p>
-                    <p class="text-xs text-gray-400 mt-0.5">예금주: <span id="account-holder">샘플(테스트)</span></p>
+                    <p class="text-xs font-bold text-gray-800" id="bank-info">국민은행 646801-01-557728</p>
+                    <p class="text-xs text-gray-500 mt-0.5">예금주: 김봉준(우모유통)</p>
                 </div>
-                <button onclick="copyAccount()" class="flex items-center gap-1 bg-neutralBg hover:bg-gray-100 border border-gray-200 text-[10px] font-bold px-2.5 py-1.5 rounded-lg active:scale-95 transition-all text-gray-600">
+                <button type="button" onclick="copyAccount()" class="min-h-11 flex items-center gap-1 bg-neutralBg hover:bg-gray-100 border border-gray-200 text-[12px] font-bold px-3 py-2 rounded-lg active:scale-95 transition-all text-gray-600" aria-label="별미집 결제계좌 복사">
                     <span class="material-symbols-outlined text-xs">content_copy</span> 계좌 복사
                 </button>
             </div>
             <!-- Alert banner -->
             <div class="bg-brandAccent/5 text-brandAccent p-3 rounded-xl text-xs leading-relaxed font-bold border border-brandAccent/10">
-                입금 시 꼭 <span class="underline">거래처명(대표자명)</span>으로 입금해 주시기 바랍니다. 입금 확인 후 별미집에서 배송을 진행합니다.
+                입금 시 꼭 <span class="underline">거래처명(대표자명)</span>으로 입금해 주시기 바랍니다. 입금 확인 완료 시 자동으로 배송 단계로 전환됩니다.
             </div>
         </div>
     </div>
 
     <!-- Footer Synced with Cafe24 -->
-    <footer class="mt-8 pt-6 border-t border-gray-100 text-[10px] text-gray-400 text-center space-y-1">
+    <footer class="mt-8 pt-6 border-t border-gray-100 text-xs text-gray-500 text-center space-y-1">
         <p class="font-bold text-gray-700">올바른 선택 별미집</p>
         <p>샘플특별시 샘플구 테스트로 00 (테스트)</p>
         <p>Copyright © 별미집. All Rights Reserved.</p>
@@ -164,7 +146,7 @@
 
         if (!buyer) {
             document.getElementById("buyer-title").textContent = "손님 대표님";
-            document.getElementById("invoice-items").innerHTML = `<tr><td colspan="4" class="py-6 text-center text-gray-400">발주 내역이 없거나 거래처명이 전송되지 않았습니다.</td></tr>`;
+            document.getElementById("invoice-items").innerHTML = `<tr><td colspan="4" class="py-6 text-center text-gray-500">발주 내역이 없거나 거래처명이 전송되지 않았습니다.</td></tr>`;
             return;
         }
 
@@ -194,8 +176,7 @@
 
             // 1. 해당 거래처의 주문 수량 집계 + 결제 상태 수집
             const itemQtyMap = {};
-            const buyerPayStatuses = [];
-            orders.forEach(o => {
+            orders.filter(o => BongBongStore.isActiveOrder(o)).forEach(o => {
                 if (o.buyerName === buyer) {
                     if (!itemQtyMap[o.itemId]) {
                         itemQtyMap[o.itemId] = 0;
@@ -214,9 +195,10 @@
             for (const [itemId, totalQty] of Object.entries(itemQtyMap)) {
                 const item = items.find(i => i.id === itemId);
                 if (!item) continue;
-                
-                // 전용가가 있으면 전용가, 없으면 기본가 (수량 티어는 폐지됨)
-                const finalPrice = BongBongCalculator.getWholesaleUnitPrice(item, totalQty, buyerPrices[itemId]);
+
+                // Get the secure final price from the server via RPC
+                const benefitInfo = await BongBongStore.getBuyerTierBenefit(itemId, totalQty);
+                const finalPrice = benefitInfo ? benefitInfo.currentUnitPrice : item.basePrice;
                 const subtotal = totalQty * finalPrice;
                 totalBill += subtotal;
                 count++;
@@ -233,7 +215,7 @@
             }
 
             if (count === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-gray-400">금일 접수된 발주 내역이 존재하지 않습니다.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-gray-500">금일 접수된 발주 내역이 존재하지 않습니다.</td></tr>`;
             } else {
                 document.getElementById("invoice-total").textContent = `₩${totalBill.toLocaleString()}`;
             }
@@ -253,16 +235,31 @@
         }
     });
 
+    let toastTimer = null;
+    function showToast(message, tone = "info") {
+        const toast = document.getElementById("app-toast");
+        if (!toast) return;
+        const toneClass = tone === "success"
+            ? "bg-green-50 border-green-200 text-green-800"
+            : tone === "error"
+            ? "bg-red-50 border-red-200 text-red-700"
+            : "bg-brandDark border-brandDark text-white";
+        toast.className = "fixed top-4 left-4 right-4 z-[70] mx-auto max-w-[440px] rounded-xl border px-4 py-3 text-sm font-bold shadow-sm " + toneClass;
+        toast.textContent = message;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.add("hidden"), 3200);
+    }
+
     function copyAccount() {
         // (P3-3) 설정값 기반 복사 (미로드 시 기본값으로 안전 폴백)
         const acct = BongBongStore.formatAccount(invoiceSettings);
         const biz = (invoiceSettings && invoiceSettings.business_name) || BongBongStore.DEFAULT_SETTINGS.business_name;
         const textToCopy = `${acct.bankAccount.replace(/-/g, '')} ${acct.holder}`.trim();
         navigator.clipboard.writeText(textToCopy).then(() => {
-            window.BongBongUI && window.BongBongUI.toast(`${biz} 결제계좌가 복사되었습니다: ${textToCopy}`, 'success');
+            showToast("별미집 결제계좌 정보가 복사되었습니다.", "success");
         }).catch(err => {
             console.error("복사 실패: ", err);
-            window.BongBongUI && window.BongBongUI.toast("계좌 복사에 실패했습니다. 직접 입력해 주세요.", 'error');
+            showToast("계좌 복사에 실패했습니다. 화면의 계좌번호를 직접 복사해 주세요.", "error");
         });
     }
 </script>

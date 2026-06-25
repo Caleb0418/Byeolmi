@@ -13,26 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#002045',
-                        secondary: '#0a6c44',
-                        brandDark: '#111111',
-                        brandAccent: '#0a6c44',
-                        neutralBg: '#f8f9fa'
-                    },
-                    fontFamily: {
-                        serif: ['Noto Serif KR', 'Georgia', 'serif'],
-                        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif']
-                    }
-                }
-            }
-        }
-    </script>
+    <link href="dist/tailwind.css" rel="stylesheet">
     <style>
         /* (P2-4) 접근성: 키보드 포커스 가시성 + 모션 민감 사용자 배려 */
         :focus-visible {
@@ -70,9 +51,10 @@
     </style>
 </head>
 <body class="text-brandDark font-sans">
+<div id="app-toast" class="hidden fixed top-4 left-4 right-4 z-[70] mx-auto max-w-[440px] rounded-xl border px-4 py-3 text-sm font-bold shadow-sm" role="status" aria-live="polite"></div>
 
 <div class="app-container">
-    
+
     <!-- Header Area -->
     <header class="sticky top-0 z-50 bg-white border-b border-gray-100 px-4 py-4 flex flex-col gap-3">
         <!-- 브랜드 바: 별미집 로고 -->
@@ -80,13 +62,13 @@
             <img src="logo.png" alt="별미집" height="72" width="72" class="h-16 md:h-20 w-auto object-contain"/>
         </div>
         <div class="flex items-center justify-between">
-            <span class="material-symbols-outlined text-gray-400 cursor-pointer invisible" id="header-back-btn" onclick="handleHeaderBack();">arrow_back</span>
+            <button type="button" id="header-back-btn" onclick="handleHeaderBack();" class="size-11 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-50" aria-label="이전 단계로 이동"><span class="material-symbols-outlined">arrow_back</span></button>
             <div class="text-center">
-                <span class="text-xs tracking-widest text-gray-400 font-semibold block mb-0.5" id="step-indicator">1 / 3 단계</span>
-                <h1 class="font-serif text-sm font-bold tracking-tight text-primary" id="header-title">도매 발주 품목 선택</h1>
+                <span class="text-xs tracking-widest text-gray-500 font-semibold block mb-0.5" id="step-indicator">1 / 3 단계</span>
+                <h1 class="font-serif text-sm font-bold tracking-tight text-brandDark" id="header-title">도매 발주 품목 선택</h1>
             </div>
             <div class="flex items-center gap-3 text-gray-500">
-                <span class="material-symbols-outlined cursor-pointer" onclick="location.reload();">refresh</span>
+                <button type="button" onclick="location.reload();" class="size-11 flex items-center justify-center rounded-xl hover:bg-gray-50" aria-label="주문서 새로고침"><span class="material-symbols-outlined">refresh</span></button>
             </div>
         </div>
     </header>
@@ -101,15 +83,15 @@
         <div id="step-1" class="step-container space-y-6">
             <!-- 4-Category Slider -->
             <nav class="flex gap-6 overflow-x-auto no-scrollbar border-b border-gray-50 pb-3 px-2 text-sm font-semibold">
-                <button onclick="filterCategory('all')" id="cat-all" class="text-brandDark border-b-2 border-brandDark pb-1 shrink-0">전체보기</button>
-                <button onclick="filterCategory('fresh')" id="cat-fresh" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">신선식품</button>
-                <button onclick="filterCategory('easy')" id="cat-easy" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">간편조리</button>
-                <button onclick="filterCategory('snack')" id="cat-snack" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">간식</button>
-                <button onclick="filterCategory('living')" id="cat-living" class="text-gray-400 hover:text-brandDark pb-1 shrink-0">생활용품</button>
+                <button onclick="filterCategory('all')" id="cat-all" class="min-h-11 min-w-11 px-2 text-brandDark border-b-2 border-brandDark pb-1 shrink-0">전체보기</button>
+                <button onclick="filterCategory('fresh')" id="cat-fresh" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">신선식품</button>
+                <button onclick="filterCategory('easy')" id="cat-easy" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">간편조리</button>
+                <button onclick="filterCategory('snack')" id="cat-snack" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">간식</button>
+                <button onclick="filterCategory('living')" id="cat-living" class="min-h-11 min-w-11 px-2 text-gray-500 hover:text-brandDark pb-1 shrink-0">생활용품</button>
             </nav>
 
             <!-- Welcome Hero Banner (B2B Mode) -->
-            <div class="relative bg-neutralBg border border-gray-100 p-5 rounded-2xl space-y-1 overflow-hidden">
+            <div class="relative bg-neutralBg border border-gray-100 p-5 rounded-xl space-y-1 overflow-hidden">
                 <h2 class="font-serif text-lg font-bold">도매 파트너 발주방</h2>
                 <p class="text-xs text-gray-500">도매 공급 품목 발주 전용 페이지입니다. 품목별 발주할 수량을 담아주세요.</p>
                 <div class="absolute -right-4 -bottom-4 opacity-5">
@@ -123,7 +105,7 @@
                     <span class="material-symbols-outlined text-brandAccent text-lg">list_alt</span>
                     취급 도매 품목 카탈로그
                 </h3>
-                
+
                 <div id="tiers-container" class="space-y-3">
                     <!-- Dynamic Items will be rendered here -->
                 </div>
@@ -133,8 +115,8 @@
             <div class="h-24"></div>
 
             <!-- STEP 1 Bottom Floating Action Bar -->
-            <div id="floating-bar" class="hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] p-4 bg-gradient-to-t from-white via-white/95 to-transparent z-40">
-                <button onclick="advanceFromProducts()" class="w-full bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-lg transform active:scale-98 transition-all flex items-center justify-center gap-2 text-sm">
+            <div id="floating-bar" class="hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-white border-t border-gray-100 z-40 shadow-sm">
+                <button onclick="goToStep(2)" class="w-full bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm transform active:scale-98 transition-all flex items-center justify-center gap-2 text-sm">
                     <span id="selected-summary-txt">0개 품목 선택됨</span>
                     <span class="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
@@ -143,7 +125,7 @@
 
         <!-- STEP 2: Buyer Info Input -->
         <div id="step-2" class="step-container hidden space-y-6">
-            <div class="bg-neutralBg border border-gray-100 p-5 rounded-2xl space-y-1">
+            <div class="bg-neutralBg border border-gray-100 p-5 rounded-xl space-y-1">
                 <h2 class="font-serif text-lg font-bold">발주자 정보 입력</h2>
                 <p class="text-xs text-gray-500">정확한 도매 정산 및 알림톡 전송을 위해 발주자의 정보를 확인해 주세요.</p>
             </div>
@@ -151,15 +133,15 @@
             <form id="buyer-info-form" class="space-y-4" onsubmit="event.preventDefault(); handleStep2Submit();">
                 <!-- Buyer Name -->
                 <div>
-                    <label class="block text-xs font-bold text-gray-400 mb-1">발주 등록 대표자명 / 업체명</label>
-                    <input type="text" id="buyer-name" required placeholder="예: 박민지 (마트유통)" 
+                    <label for="buyer-name" class="block text-[12px] font-bold text-gray-500 mb-1">발주 등록 대표자명 / 업체명</label>
+                    <input type="text" id="buyer-name" required placeholder="예: 박민지 (마트유통)"
                            class="w-full rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark text-sm py-3 px-4">
                 </div>
 
                 <!-- Buyer Phone Number -->
                 <div>
-                    <label class="block text-xs font-bold text-gray-400 mb-1">대표자 휴대폰 번호 (알림톡 전송용)</label>
-                    <input type="tel" id="buyer-contact" required placeholder="예: 010-1234-5678" 
+                    <label for="buyer-contact" class="block text-[12px] font-bold text-gray-500 mb-1">대표자 휴대폰 번호 (알림톡 전송용)</label>
+                    <input type="tel" id="buyer-contact" required placeholder="예: 010-1234-5678"
                            class="w-full rounded-xl border-gray-200 focus:border-brandDark focus:ring-brandDark text-sm py-3 px-4">
                 </div>
 
@@ -179,16 +161,16 @@
 
         <!-- STEP 3: Final Confirmation -->
         <div id="step-3" class="step-container hidden space-y-6">
-            <div class="bg-neutralBg border border-gray-100 p-5 rounded-2xl text-center space-y-2">
+            <div class="bg-neutralBg border border-gray-100 p-5 rounded-xl text-center space-y-2">
                 <span class="material-symbols-outlined text-brandAccent text-4xl">task_alt</span>
                 <h2 class="font-serif text-lg font-bold">이 주문이 맞습니까?</h2>
                 <p class="text-xs text-gray-500">최종 전송 전에 품목, 수량 및 발주자 정보를 다시 한번 확인해 주세요.</p>
             </div>
 
             <!-- Summary Box -->
-            <div class="border border-gray-100 rounded-2xl p-5 bg-white space-y-4">
+            <div class="border border-gray-100 rounded-xl p-5 bg-white space-y-4">
                 <div>
-                    <h3 class="text-xs font-bold text-gray-400 mb-1">발주자 정보</h3>
+                    <h3 class="text-xs font-bold text-gray-500 mb-1">발주자 정보</h3>
                     <div class="text-sm font-semibold text-brandDark" id="summary-buyer-info">
                         --
                     </div>
@@ -197,7 +179,7 @@
                 <hr class="border-gray-100">
 
                 <div>
-                    <h3 class="text-xs font-bold text-gray-400 mb-2">선택한 발주 품목 목록</h3>
+                    <h3 class="text-xs font-bold text-gray-500 mb-2">선택한 발주 품목 목록</h3>
                     <div id="summary-items-list" class="space-y-2">
                         <!-- Summary list of items will be injected here -->
                     </div>
@@ -217,7 +199,7 @@
     </main>
 
     <!-- Footer Area (Synced with Cafe24 Screenshot) -->
-    <footer class="p-6 bg-neutralBg border-t border-gray-200/60 text-[11px] text-gray-500 space-y-4">
+    <footer class="p-6 bg-neutralBg border-t border-gray-200/60 text-xs text-gray-500 space-y-4">
         <div class="space-y-1">
             <h4 class="font-serif text-sm font-bold text-primary mb-2">올바른 선택 별미집</h4>
             <p>상호명: 샘플(테스트) | 대표자명: 샘플(테스트)</p>
@@ -229,47 +211,76 @@
             <p class="font-bold text-brandDark">무통장 결제계좌 정보</p>
             <p id="footer-account">국민은행 000-0000-0000-00 샘플(테스트)</p>
         </div>
-        <p class="text-[10px] text-gray-400 pt-2 border-t border-gray-200/40">
+        <p class="text-xs text-gray-500 pt-2 border-t border-gray-200/40">
             Copyright © 별미집. All Rights Reserved. Hosting by Cafe24 Corp.
         </p>
     </footer>
 
     <!-- Order Success Bottom Sheet Drawer -->
-    <div id="order-success-drawer" class="hidden fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm">
-        <div class="bg-white rounded-t-3xl w-full max-w-[480px] p-6 space-y-6 shadow-2xl transform translate-y-full transition-transform duration-300 ease-out border-t border-gray-100 flex flex-col">
+    <div id="order-success-drawer" role="dialog" aria-modal="true" aria-labelledby="order-success-title" class="hidden fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm">
+        <div class="bg-white rounded-t-2xl w-full max-w-[480px] p-6 space-y-6 shadow-sm transform translate-y-full transition-transform duration-300 ease-out border-t border-gray-100 flex flex-col">
             <!-- Pull Bar -->
-            <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto cursor-pointer" onclick="closeOrderSuccessDrawer()"></div>
-            
+            <button type="button" class="w-12 h-6 mx-auto flex items-center justify-center" onclick="closeOrderSuccessDrawer()" aria-label="주문 완료 창 닫기"><span class="w-12 h-1.5 bg-gray-200 rounded-full"></span></button>
+
             <!-- Success Status Icon -->
             <div class="text-center space-y-2 pt-2">
                 <div class="w-16 h-16 rounded-full bg-green-50 text-brandAccent flex items-center justify-center mx-auto shadow-inner">
                     <span class="material-symbols-outlined text-3xl font-bold">check_circle</span>
                 </div>
-                <h3 class="font-serif text-lg font-bold text-gray-900">도매 발주 전송 완료</h3>
-                <p class="text-xs text-gray-400">성공적으로 발주서 사본이 카카오톡 망으로 자동 전송되었습니다.</p>
+                <h3 id="order-success-title" class="font-serif text-lg font-bold text-gray-900">도매 발주 전송 완료</h3>
+                <p class="text-xs text-gray-500">발주가 접수되었습니다. 최종 정산 금액과 입금 안내는 마감 후 알림톡으로 다시 안내됩니다.</p>
             </div>
 
             <!-- Receipt Summary Box -->
-            <div class="bg-neutralBg rounded-2xl p-4 border border-gray-100 space-y-3 text-left">
+            <div class="bg-neutralBg rounded-xl p-4 border border-gray-100 space-y-3 text-left">
                 <div class="flex justify-between items-center text-xs">
-                    <span class="text-gray-400 font-bold">발주 처</span>
+                    <span class="text-gray-500 font-bold">발주 처</span>
                     <span class="font-bold text-gray-900" id="receipt-buyer">--</span>
                 </div>
                 <div class="flex justify-between items-center text-xs">
-                    <span class="text-gray-400 font-bold">발주 품목</span>
+                    <span class="text-gray-500 font-bold">발주 품목</span>
                     <span class="font-bold text-gray-900" id="receipt-item">--</span>
                 </div>
                 <div class="flex justify-between items-center text-xs">
-                    <span class="text-gray-400 font-bold">발주 수량</span>
+                    <span class="text-gray-500 font-bold">발주 수량</span>
                     <span class="font-bold text-gray-900 text-sm" id="receipt-qty">0박스</span>
                 </div>
             </div>
+            <div id="order-success-feedback" class="hidden rounded-xl border border-gray-100 bg-gray-50 p-3 text-[12px] font-bold text-gray-650"></div>
 
-            <!-- Confirm Button -->
-            <button onclick="closeOrderSuccessDrawer()" class="w-full bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm text-sm active:scale-98 transition-all flex items-center justify-center gap-1.5">
-                <span class="material-symbols-outlined text-sm">done</span>
-                주문 확인 완료
+            <div class="grid grid-cols-2 gap-3">
+                <button type="button" onclick="editLastSubmittedOrder()" class="min-h-12 border border-gray-200 text-gray-800 font-bold py-3 rounded-xl hover:bg-gray-50 active:scale-98 transition-all text-sm flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-sm">edit</span>
+                    주문 수정하기
+                </button>
+                <button type="button" onclick="cancelLastSubmittedOrder()" class="min-h-12 border border-red-100 bg-red-50 text-red-600 font-bold py-3 rounded-xl hover:bg-red-100 active:scale-98 transition-all text-sm flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-sm">close</span>
+                    주문 취소하기
+                </button>
+            </div>
+            <button type="button" onclick="startAdditionalOrder()" class="w-full min-h-12 bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm text-sm active:scale-98 transition-all flex items-center justify-center gap-1.5">
+                <span class="material-symbols-outlined text-sm">add_shopping_cart</span>
+                추가 발주하기
             </button>
+            <button type="button" onclick="closeOrderSuccessDrawer()" class="w-full min-h-12 border border-gray-200 bg-white text-gray-800 font-bold py-4 rounded-xl text-sm active:scale-98 transition-all flex items-center justify-center gap-1.5">
+                <span class="material-symbols-outlined text-sm">done</span>
+                주문서 닫기
+            </button>
+        </div>
+    </div>
+
+
+    <!-- Common Confirmation Modal -->
+    <div id="confirm-action-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-action-title" class="hidden fixed inset-0 z-[65] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-xl w-full max-w-[360px] shadow-sm p-6 space-y-4">
+            <div class="space-y-2">
+                <h3 id="confirm-action-title" class="font-serif text-lg font-bold text-brandDark">확인이 필요합니다</h3>
+                <p id="confirm-action-message" class="text-sm leading-relaxed text-gray-600 whitespace-pre-line">이 작업을 진행할까요?</p>
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" id="confirm-action-cancel" class="min-h-11 px-4 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-50">취소</button>
+                <button type="button" id="confirm-action-confirm" class="min-h-11 px-5 rounded-xl bg-brandDark text-sm font-bold text-white hover:bg-black">확인</button>
+            </div>
         </div>
     </div>
 
@@ -299,10 +310,103 @@
     let activeCategory = 'all';
     let currentStep = 1;
     const selectedItems = new Map(); // Store item quantities. key: itemId, value: qty
-    // 옵션 A: 단골(이름+유효 번호 보유) 자동완성 시 정보 입력 2단계를 건너뛴다.
-    let profileComplete = false;          // 발주자 정보가 이미 채워졌는지
-    let enteredConfirmFrom = 2;           // 최종확인(3단계)에 어느 단계에서 진입했는지(뒤로가기용)
-    const CONTACT_RE = /^01[016789]-?\d{3,4}-?\d{4}$/;
+    let lastSubmittedOrderIds = [];
+    let lastSubmittedOrderSnapshot = null;
+    let isEditingSubmittedOrder = false;
+
+    let toastTimer = null;
+    function showToast(message, tone = "info") {
+        const toast = document.getElementById("app-toast");
+        if (!toast) return;
+        const toneClass = tone === "success"
+            ? "bg-green-50 border-green-200 text-green-800"
+            : tone === "error"
+            ? "bg-red-50 border-red-200 text-red-700"
+            : tone === "warning"
+            ? "bg-amber-50 border-amber-200 text-amber-800"
+            : "bg-brandDark border-brandDark text-white";
+        toast.className = "fixed top-4 left-4 right-4 z-[70] mx-auto max-w-[440px] rounded-xl border px-4 py-3 text-sm font-bold shadow-sm " + toneClass;
+        toast.textContent = message;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.add("hidden"), 3200);
+    }
+
+    let lastFocusedElement = null;
+    let pendingConfirmResolve = null;
+    function getFocusableElements(container) {
+        return [...container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+            .filter(el => !el.disabled && el.offsetParent !== null);
+    }
+
+    function openSimpleModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        lastFocusedElement = document.activeElement;
+        modal.classList.remove("hidden");
+        getFocusableElements(modal)[0]?.focus();
+    }
+
+    function closeSimpleModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        modal.classList.add("hidden");
+        if (lastFocusedElement && typeof lastFocusedElement.focus === "function") lastFocusedElement.focus();
+    }
+
+    function requestConfirmation({ title = "확인이 필요합니다", message = "이 작업을 진행할까요?", confirmText = "확인", tone = "default" } = {}) {
+        const titleEl = document.getElementById("confirm-action-title");
+        const messageEl = document.getElementById("confirm-action-message");
+        const confirmBtn = document.getElementById("confirm-action-confirm");
+        if (!titleEl || !messageEl || !confirmBtn) return Promise.resolve(false);
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        confirmBtn.textContent = confirmText;
+        confirmBtn.className = tone === "danger"
+            ? "min-h-11 px-5 rounded-xl bg-red-600 text-sm font-bold text-white hover:bg-red-700"
+            : "min-h-11 px-5 rounded-xl bg-brandDark text-sm font-bold text-white hover:bg-black";
+        return new Promise(resolve => {
+            pendingConfirmResolve = resolve;
+            openSimpleModal("confirm-action-modal");
+        });
+    }
+
+    function resolveConfirmation(result) {
+        closeSimpleModal("confirm-action-modal");
+        if (pendingConfirmResolve) {
+            pendingConfirmResolve(result);
+            pendingConfirmResolve = null;
+        }
+    }
+
+    document.getElementById("confirm-action-cancel")?.addEventListener("click", () => resolveConfirmation(false));
+    document.getElementById("confirm-action-confirm")?.addEventListener("click", () => resolveConfirmation(true));
+    document.addEventListener("keydown", (event) => {
+        const confirmModal = document.getElementById("confirm-action-modal");
+        const openDialog = confirmModal && !confirmModal.classList.contains("hidden")
+            ? confirmModal
+            : [...document.querySelectorAll('[role="dialog"]:not(.hidden)')].at(-1);
+        if (!openDialog) return;
+
+        if (event.key === "Escape") {
+            if (openDialog.id === "confirm-action-modal") resolveConfirmation(false);
+            else if (openDialog.id === "order-success-drawer") closeOrderSuccessDrawer();
+            return;
+        }
+
+        if (event.key !== "Tab") return;
+        const focusable = getFocusableElements(openDialog);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    });
+
 
     document.addEventListener("DOMContentLoaded", async () => {
         // 0-0. 마감 여부 실시간 확인 및 UI 차단
@@ -310,7 +414,7 @@
             try {
                 const isClosed = await BongBongStore.isClosed();
                 const closedAlert = document.getElementById("closed-alert");
-                
+
                 if (isClosed) {
                     if (closedAlert) closedAlert.classList.remove("hidden");
                     document.body.classList.add("order-closed");
@@ -322,12 +426,57 @@
         }
         await checkClosedStatus();
 
-        // 0. 접속 승인제 게이트 — 카카오 로그인 + 거래처 '승인' 상태만 발주 허용
-        //    (비로그인 즉시 발주는 폐기됨. 미승인/차단은 안내 화면으로 차단)
-        const access = await resolveAccess();
-        if (access.state !== "approved") {
-            showAccessGate(access);
-            return; // 발주 UI 초기화를 중단한다
+        // 0. Buyer 권한 및 프로필 자동 로드 (비로그인 발주는 입력 허용)
+        async function checkClientAuth() {
+            if (!supabase) return;
+            try {
+                const buyerInput = document.getElementById("buyer-name");
+                const contactInput = document.getElementById("buyer-contact");
+
+                // URL에서 token 파라미터가 제공된 경우 (우선순위 1)
+                const urlParams = new URLSearchParams(window.location.search);
+                const token = urlParams.get('token');
+                if (token) {
+                    const { data: buyerData } = await supabase
+                        .from('buyers')
+                        .select('name, contact')
+                        .eq('id', token)
+                        .maybeSingle();
+                    if (buyerData) {
+                        buyerInput.value = buyerData.name;
+                        buyerInput.disabled = true;
+
+                        if (buyerData.contact) {
+                            const decryptedContact = BongBongCrypt.decrypt(buyerData.contact);
+                            contactInput.value = decryptedContact;
+                            contactInput.disabled = true;
+                        }
+                        return;
+                    }
+                }
+
+                // 기존 로그인 세션이 있는 경우 (우선순위 2)
+                const user = await BongBongAuth.getCurrentUser();
+                if (user) {
+                    const { data } = await supabase
+                        .from('buyers')
+                        .select('name, contact')
+                        .eq('auth_uid', user.id)
+                        .maybeSingle();
+                    if (data && data.name) {
+                        buyerInput.value = data.name;
+                        buyerInput.disabled = true;
+
+                        if (data.contact) {
+                            const decryptedContact = BongBongCrypt.decrypt(data.contact);
+                            contactInput.value = decryptedContact;
+                            contactInput.disabled = true;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Auth check failed:", err);
+            }
         }
         applyApprovedBuyer(access.buyer);
 
@@ -401,7 +550,7 @@
                 if (t === catId) {
                     btn.className = "text-brandDark border-b-2 border-brandDark pb-1 shrink-0";
                 } else {
-                    btn.className = "text-gray-400 hover:text-brandDark pb-1 shrink-0";
+                    btn.className = "text-gray-500 hover:text-brandDark pb-1 shrink-0";
                 }
             }
         });
@@ -416,22 +565,12 @@
 
             container.innerHTML = "";
 
-            const filteredItems = activeCategory === 'all' 
-                ? items 
+            const filteredItems = activeCategory === 'all'
+                ? items
                 : items.filter(i => i.category === activeCategory);
 
             if (filteredItems.length === 0) {
-                // (P3-3) 빈 상태 — 전체에 품목이 없을 때와 특정 카테고리만 비었을 때를 구분
-                const isAllEmpty = items.length === 0;
-                const message = isAllEmpty
-                    ? "오늘 공급 예정인 품목이 아직 등록되지 않았습니다.<br>잠시 후 다시 확인해 주세요."
-                    : "이 분류에 해당하는 품목이 없습니다.<br>다른 분류를 선택해 보세요.";
-                container.innerHTML = `
-                    <div class="flex flex-col items-center justify-center text-center py-12 px-6 space-y-2">
-                        <span class="material-symbols-outlined text-4xl text-gray-300">storefront</span>
-                        <p class="text-xs text-gray-400 leading-relaxed">${message}</p>
-                    </div>
-                `;
+                container.innerHTML = `<p class="text-xs text-gray-500 py-6 text-center">취급 중인 품목이 없습니다.</p>`;
                 return;
             }
 
@@ -439,8 +578,8 @@
 
             filteredItems.forEach(item => {
                 const isAvail = item.isAvailable !== false;
-                const badgeClass = isAvail 
-                    ? "text-brandAccent bg-green-50 border-brandAccent/20" 
+                const badgeClass = isAvail
+                    ? "text-brandAccent bg-green-50 border-brandAccent/20"
                     : "text-red-500 bg-red-50 border-red-200";
                 const badgeText = isAvail ? "공급 중" : "일시 품절";
                 const opacityClass = isAvail ? "" : "opacity-60";
@@ -450,15 +589,15 @@
                 // 수량 조절기 렌더링
                 let qtyControllerHtml = "";
                 if (!isAvail) {
-                    qtyControllerHtml = `<span class="px-2.5 py-1 border rounded-lg text-[10px] font-bold ${badgeClass}">${badgeText}</span>`;
+                    qtyControllerHtml = `<span class="px-2.5 py-1 border rounded-lg text-xs font-bold ${badgeClass}">${badgeText}</span>`;
                 } else if (isClosed) {
-                    qtyControllerHtml = `<span class="px-2.5 py-1 bg-gray-100 text-gray-400 border rounded-lg text-[10px] font-bold">주문 마감</span>`;
+                    qtyControllerHtml = `<span class="px-2.5 py-1 bg-gray-100 text-gray-500 border rounded-lg text-xs font-bold">주문 마감</span>`;
                 } else {
                     qtyControllerHtml = `
                         <div class="flex items-center gap-1 border border-gray-200 rounded-xl p-1 bg-gray-50">
-                            <button type="button" onclick="changeItemQty('${item.id}', -1)" class="w-8 h-8 rounded-lg bg-white border flex items-center justify-center font-bold text-sm shadow-sm active:scale-90 hover:bg-gray-100">-</button>
-                            <input type="number" id="qty-input-${item.id}" value="${currentQty}" min="0" oninput="handleItemInputQty('${item.id}', this.value)" onblur="normalizeItemQty('${item.id}', this)" class="w-12 text-center font-bold text-sm text-brandDark bg-transparent border-0 focus:ring-0 p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                            <button type="button" onclick="changeItemQty('${item.id}', 1)" class="w-8 h-8 rounded-lg bg-white border flex items-center justify-center font-bold text-sm shadow-sm active:scale-90 hover:bg-gray-100">+</button>
+                            <button type="button" aria-label="${item.name} 수량 줄이기" onclick="changeItemQty('${item.id}', -1)" class="size-11 rounded-lg bg-white border flex items-center justify-center font-bold text-sm shadow-sm active:scale-95 hover:bg-gray-100">-</button>
+                            <input type="number" id="qty-input-${item.id}" aria-label="${item.name} 수량" value="${currentQty}" min="0" oninput="handleItemInputQty('${item.id}', this.value)" onblur="normalizeItemQty('${item.id}', this)" class="w-14 min-h-11 text-center font-bold text-sm text-brandDark bg-transparent border-0 focus:ring-brandDark p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                            <button type="button" aria-label="${item.name} 수량 늘리기" onclick="changeItemQty('${item.id}', 1)" class="size-11 rounded-lg bg-white border flex items-center justify-center font-bold text-sm shadow-sm active:scale-95 hover:bg-gray-100">+</button>
                         </div>
                     `;
                 }
@@ -467,7 +606,7 @@
                     <div class="p-4 border border-gray-100 rounded-xl bg-white flex items-center justify-between hover:shadow-sm transition-all ${opacityClass}">
                         <div>
                             <h4 class="font-bold text-gray-900 text-sm">${item.name}</h4>
-                            <p class="text-xs text-gray-400 mt-0.5">단위: ${item.unit}</p>
+                            <p class="text-xs text-gray-500 mt-0.5">단위: ${item.unit}</p>
                         </div>
                         <div class="flex items-center gap-3">
                             ${qtyControllerHtml}
@@ -501,7 +640,7 @@
         if (newQty < 0) {
             newQty = 0;
         }
-        
+
         if (newQty === 0) {
             selectedItems.delete(itemId);
         } else {
@@ -586,7 +725,7 @@
         const step1 = document.getElementById("step-1");
         const step2 = document.getElementById("step-2");
         const step3 = document.getElementById("step-3");
-        
+
         const stepIndicator = document.getElementById("step-indicator");
         const headerTitle = document.getElementById("header-title");
         const backBtn = document.getElementById("header-back-btn");
@@ -646,22 +785,11 @@
                     qty: 1
                 });
             } catch (err) {
-                const msgs = err.errors
-                    ? err.errors.map(e => `• ${e.message}`)
-                    : [`• 오류가 발생했습니다: ${err.message}`];
-                if (errEl) {
-                    errEl.innerHTML = msgs.join("<br>");
-                    errEl.classList.remove("hidden");
-                }
-                // 첫 번째 오류 필드로 포커스 이동 + 강조
-                const firstPath = err.errors && err.errors[0] && err.errors[0].path && err.errors[0].path[0];
-                const fieldId = firstPath === "buyerContact" ? "buyer-contact"
-                              : firstPath === "buyerName" ? "buyer-name" : null;
-                const field = fieldId && document.getElementById(fieldId);
-                if (field) {
-                    field.classList.add("border-red-400");
-                    field.focus();
-                    field.scrollIntoView({ block: "center", behavior: "smooth" });
+                if (err.errors) {
+                    const errorMsg = err.errors.map(e => e.message).join(" / ");
+                    showToast(`입력 값이 올바르지 않습니다. ${errorMsg}`, "error");
+                } else {
+                    showToast(`오류가 발생했습니다: ${err.message}`, "error");
                 }
                 return;
             }
@@ -711,7 +839,7 @@
         const submitBtn = document.getElementById("submit-btn");
 
         if (selectedItems.size === 0) {
-            window.BongBongUI && window.BongBongUI.toast("선택된 발주 품목이 없습니다.", 'info');
+            showToast("선택된 발주 품목이 없습니다.", "warning");
             goToStep(1);
             return;
         }
@@ -720,74 +848,193 @@
             submitBtn.disabled = true;
             submitBtn.innerHTML = `<span class="material-symbols-outlined animate-spin text-sm">sync</span> 전송 중...`;
 
+            const isClosed = await BongBongStore.isClosed();
+            if (isClosed) {
+                throw new Error("마감 이후에는 주문 수정/전송이 어렵습니다. 별미집에 직접 문의해 주세요.");
+            }
+
             localStorage.setItem("bb_cached_buyer_name", buyerName);
             localStorage.setItem("bb_cached_buyer_contact", buyerContact);
 
             const items = await BongBongStore.getItems();
-            const orderPromises = [];
             const summaryDetails = [];
-
             selectedItems.forEach((qty, itemId) => {
                 const item = items.find(i => i.id === itemId);
-                if (item) {
-                    orderPromises.push(BongBongStore.addOrder(buyerName, itemId, qty, buyerContact));
-                    summaryDetails.push(`${item.name} ${qty}${item.unit}`);
-                }
+                if (item) summaryDetails.push(`${item.name} ${qty}${item.unit}`);
             });
 
-            const results = await Promise.all(orderPromises);
+            let submittedOrderIds = [];
+            if (isEditingSubmittedOrder && lastSubmittedOrderIds.length > 0) {
+                submittedOrderIds = await BongBongStore.updateOrdersForBuyer(lastSubmittedOrderIds, buyerName, buyerContact, selectedItems);
+            } else {
+                const orderPromises = [];
+                selectedItems.forEach((qty, itemId) => {
+                    const item = items.find(i => i.id === itemId);
+                    if (item) orderPromises.push(BongBongStore.addOrder(buyerName, itemId, qty, buyerContact));
+                });
+                const results = await Promise.all(orderPromises);
+                submittedOrderIds = results.map(order => order.id);
+            }
 
             const itemsSummaryTxt = summaryDetails.join(", ");
             const totalQty = Array.from(selectedItems.values()).reduce((sum, q) => sum + q, 0);
+            lastSubmittedOrderIds = submittedOrderIds;
+            lastSubmittedOrderSnapshot = {
+                buyerName,
+                buyerContact,
+                items: Array.from(selectedItems.entries())
+            };
+            const wasEdit = isEditingSubmittedOrder;
+            isEditingSubmittedOrder = false;
 
-            // (P1-2) 구매자에게 발주 접수 확인 알림톡 발송 (fail-safe: 실패해도 발주는 성공 처리)
-            const orderConfirmSummary = summaryDetails.map(d => `- ${d}`).join("\n");
-            BongBongStore.sendOrderConfirmation(buyerName, buyerContact, orderConfirmSummary)
-                .catch(err => console.warn("발주 확인 알림톡 발송 실패(발주는 정상 접수됨):", err));
+            if (buyerContact) {
+                try {
+                    let estimatedTotal = 0;
+                    items.forEach(item => {
+                        const qty = selectedItems.get(item.id) || 0;
+                        if (qty > 0) estimatedTotal += qty * item.basePrice;
+                    });
 
-            openOrderSuccessDrawer(buyerName, itemsSummaryTxt, totalQty);
+                    const today = new Date();
+                    const todayStr = `${today.getMonth() + 1}월 ${today.getDate()}일`;
+                    const customMessage = `[별미집 B2B 발주 ${wasEdit ? '수정' : '완료'} 안내]\n\n안녕하세요, ${buyerName} 대표님.\n금일(${todayStr}) 별미집 도매 발주가 정상적으로 ${wasEdit ? '수정' : '접수'}되었습니다.\n\n■ 발주 내역 요약:\n${summaryDetails.map(d => `- ${d}`).join('\n')}\n\n■ 예상 청구 금액: ₩${estimatedTotal.toLocaleString()}\n※ 최종 청구 금액 및 혜택은 정산 마감 후 알림톡으로 재안내 드립니다.`;
+                    BongBongStore.sendAlimtalk(buyerName, buyerContact, estimatedTotal, itemsSummaryTxt, window.location.origin + `/client.html`, null, customMessage)
+                        .catch(err => console.warn("Buyer notification Kakao Talk sending failed (non-blocking):", err));
+                } catch (notifyErr) {
+                    console.warn("Failed to trigger buyer notification:", notifyErr);
+                }
+            }
+
+            openOrderSuccessDrawer(buyerName, itemsSummaryTxt, totalQty, wasEdit ? "edit" : "new");
 
             selectedItems.clear();
             await renderPage();
             goToStep(1);
         } catch (error) {
             console.error("최종 주문 전송 에러:", error);
-            alert(`주문 전송 중 오류가 발생했습니다: ${error.message}`);
+            showToast(`주문 전송 중 오류가 발생했습니다: ${error.message}`, "error");
         } finally {
             submitBtn.disabled = false;
             submitBtn.innerHTML = `<span class="material-symbols-outlined text-sm">check_circle</span> 최종 발주서 전송하기`;
         }
     };
 
-    window.openOrderSuccessDrawer = function(buyerName, itemName, qty) {
+    window.openOrderSuccessDrawer = function(buyerName, itemName, qty, mode = "new") {
         const drawer = document.getElementById("order-success-drawer");
         const inner = drawer.querySelector("div");
-        
+        const feedback = document.getElementById("order-success-feedback");
+
+        document.getElementById("order-success-title").textContent = mode === "edit" ? "도매 발주 수정 완료" : "도매 발주 전송 완료";
         document.getElementById("receipt-buyer").textContent = buyerName;
         document.getElementById("receipt-item").textContent = itemName;
         document.getElementById("receipt-qty").textContent = qty + " 박스/단위";
-        
+        if (feedback) {
+            feedback.classList.add("hidden");
+            feedback.textContent = "";
+        }
+
+        lastFocusedElement = document.activeElement;
         drawer.classList.remove("hidden");
         setTimeout(() => {
             inner.classList.remove("translate-y-full");
+            getFocusableElements(drawer)[0]?.focus();
         }, 10);
     };
 
     window.closeOrderSuccessDrawer = function() {
         const drawer = document.getElementById("order-success-drawer");
         const inner = drawer.querySelector("div");
-        
+
         inner.classList.add("translate-y-full");
         setTimeout(() => {
             drawer.classList.add("hidden");
+            if (lastFocusedElement && typeof lastFocusedElement.focus === "function") lastFocusedElement.focus();
         }, 300);
+    };
+
+    function showOrderSuccessFeedback(message, tone = "info") {
+        const feedback = document.getElementById("order-success-feedback");
+        if (!feedback) return;
+        feedback.textContent = message;
+        feedback.className = tone === "error"
+            ? "rounded-xl border border-red-100 bg-red-50 p-3 text-[12px] font-bold text-red-600"
+            : "rounded-xl border border-gray-100 bg-gray-50 p-3 text-[12px] font-bold text-gray-650";
+    }
+
+    window.editLastSubmittedOrder = async function() {
+        try {
+            const isClosed = await BongBongStore.isClosed();
+            if (isClosed) {
+                showOrderSuccessFeedback("마감 이후에는 주문 수정이 어렵습니다. 별미집에 직접 문의해 주세요.", "error");
+                return;
+            }
+            if (!lastSubmittedOrderSnapshot || lastSubmittedOrderIds.length === 0) {
+                showOrderSuccessFeedback("수정할 주문 정보를 찾지 못했습니다.", "error");
+                return;
+            }
+
+            document.getElementById("buyer-name").value = lastSubmittedOrderSnapshot.buyerName;
+            document.getElementById("buyer-contact").value = lastSubmittedOrderSnapshot.buyerContact || "";
+            selectedItems.clear();
+            lastSubmittedOrderSnapshot.items.forEach(([itemId, qty]) => selectedItems.set(itemId, qty));
+            isEditingSubmittedOrder = true;
+
+            closeOrderSuccessDrawer();
+            await renderPage();
+            await goToStep(1);
+            updateFloatingBar();
+        } catch (err) {
+            showOrderSuccessFeedback("주문 수정 준비 중 오류가 발생했습니다: " + err.message, "error");
+        }
+    };
+
+    window.startAdditionalOrder = async function() {
+        try {
+            selectedItems.clear();
+            isEditingSubmittedOrder = false;
+            closeOrderSuccessDrawer();
+            await renderPage();
+            await goToStep(1);
+            updateFloatingBar();
+        } catch (err) {
+            showToast("새 발주를 준비하는 중 오류가 발생했습니다: " + err.message, "error");
+        }
+    };
+
+    window.cancelLastSubmittedOrder = async function() {
+        try {
+            const isClosed = await BongBongStore.isClosed();
+            if (isClosed) {
+                showOrderSuccessFeedback("마감 이후에는 주문 취소가 어렵습니다. 별미집에 직접 문의해 주세요.", "error");
+                return;
+            }
+            if (lastSubmittedOrderIds.length === 0) {
+                showOrderSuccessFeedback("취소할 주문 정보를 찾지 못했습니다.", "error");
+                return;
+            }
+            const confirmed = await requestConfirmation({
+                title: "주문 취소",
+                message: "방금 보낸 주문을 취소할까요? 취소 후 사장님 화면에는 취소 상태로 남습니다.",
+                confirmText: "주문 취소",
+                tone: "danger"
+            });
+            if (!confirmed) return;
+
+            await Promise.all(lastSubmittedOrderIds.map(orderId => BongBongStore.cancelOrder(orderId)));
+            lastSubmittedOrderIds = [];
+            lastSubmittedOrderSnapshot = null;
+            isEditingSubmittedOrder = false;
+            showOrderSuccessFeedback("주문이 취소되었습니다. 필요하면 새 발주를 다시 작성할 수 있습니다.", "success");
+        } catch (err) {
+            showOrderSuccessFeedback("주문 취소 중 오류가 발생했습니다: " + err.message, "error");
+        }
     };
 
     window.handleKakaoLogin = async function() {
         try {
             await BongBongAuth.signInWithKakao('/client.html');
         } catch (err) {
-            alert("카카오 로그인 중 오류가 발생했습니다: " + err.message);
+            showToast("카카오 로그인 중 오류가 발생했습니다: " + err.message, "error");
         }
     };
 

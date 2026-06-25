@@ -100,12 +100,12 @@ class BongBongStore {
         const { data, error } = await supabase
             .from('items')
             .select('*, item_tiers(*)');
-        
+
         if (error) {
             console.error("Failed to fetch items:", error);
             throw new Error(error.message);
         }
-        
+
         return data.map(item => ({
             id: item.id,
             category: item.category,
@@ -125,7 +125,7 @@ class BongBongStore {
             ItemSchema.parse(item);
         }
         if (!supabase) return;
-        
+
         const dbItem = {
             id: item.id,
             category: item.category,
@@ -138,7 +138,7 @@ class BongBongStore {
         const { error: itemError } = await supabase
             .from('items')
             .insert(dbItem);
-            
+
         if (itemError) {
             console.error("Failed to add item:", itemError);
             throw new Error(itemError.message);
@@ -158,13 +158,13 @@ class BongBongStore {
                 throw new Error(tiersError.message);
             }
         }
-        
+
         this.dispatchStorageChange();
     }
 
     static async updateItem(itemId, updatedItem) {
         if (!supabase) return;
-        
+
         const items = await this.getItems();
         const existingItem = items.find(item => item.id === itemId);
         const newItem = { ...existingItem, ...updatedItem };
@@ -184,7 +184,7 @@ class BongBongStore {
             .from('items')
             .update(dbItem)
             .eq('id', itemId);
-            
+
         if (itemError) {
             console.error("Failed to update item:", itemError);
             throw new Error(itemError.message);
@@ -214,7 +214,7 @@ class BongBongStore {
                 throw new Error(insertTiersError.message);
             }
         }
-        
+
         this.dispatchStorageChange();
     }
 
@@ -224,7 +224,7 @@ class BongBongStore {
             .from('items')
             .delete()
             .eq('id', itemId);
-            
+
         if (error) {
             console.error("Failed to delete item:", error);
             throw new Error(error.message);
@@ -238,12 +238,12 @@ class BongBongStore {
             .from('orders')
             .select('*')
             .order('created_at', { ascending: false });
-        
+
         if (error) {
             console.error("Failed to fetch orders:", error);
             throw new Error(error.message);
         }
-        
+
         return data.map(order => ({
             id: order.id,
             buyerName: order.buyer_name,
@@ -255,6 +255,10 @@ class BongBongStore {
             createdAt: order.created_at
         }));
     }
+    static isActiveOrder(order) {
+        return order && order.status !== '취소됨';
+    }
+
 
     static async saveOrders(orders) {
         if (!supabase) return;
@@ -266,11 +270,11 @@ class BongBongStore {
             status: order.status,
             time: order.time
         }));
-        
+
         const { error } = await supabase
             .from('orders')
             .upsert(dbOrders);
-            
+
         if (error) {
             console.error("Failed to save orders:", error);
             throw new Error(error.message);
@@ -311,7 +315,7 @@ class BongBongStore {
 
     static async addOrder(buyerName, itemId, qty, buyerContact = "") {
         const parsedQty = parseInt(qty, 10);
-        
+
         // 연락처 하이픈 자동 정리
         let formattedContact = "";
         if (buyerContact) {
@@ -356,7 +360,7 @@ class BongBongStore {
                 }
             }
         }
-        
+
         // 2. 비로그인이거나 매핑 정보가 없으면 이름(buyerName) 기반 조회
         if (!buyerId) {
             const { data: buyerByName } = await supabase
@@ -390,7 +394,7 @@ class BongBongStore {
 
         const now = new Date();
         const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-        
+
         const dbOrder = {
             buyer_id: buyerId,
             buyer_name: buyerName,
@@ -404,14 +408,14 @@ class BongBongStore {
             .from('orders')
             .insert(dbOrder)
             .select();
-        
+
         if (error) {
             console.error("Failed to add order:", error);
             throw new Error(error.message);
         }
 
         this.dispatchStorageChange();
-        
+
         const created = data[0];
         return {
             id: created.id,
@@ -419,7 +423,8 @@ class BongBongStore {
             itemId: created.item_id,
             qty: created.qty,
             time: created.time,
-            status: created.status
+            status: created.status,
+            createdAt: created.created_at
         };
     }
 
@@ -429,7 +434,7 @@ class BongBongStore {
             .from('orders')
             .update({ status })
             .eq('id', orderId);
-            
+
         if (error) {
             console.error("Failed to update order status:", error);
             throw new Error(error.message);
@@ -458,7 +463,7 @@ class BongBongStore {
             .from('orders')
             .update(dbOrder)
             .eq('id', orderId);
-            
+
         if (error) {
             console.error("Failed to update order:", error);
             throw new Error(error.message);
@@ -472,13 +477,51 @@ class BongBongStore {
             .from('orders')
             .delete()
             .eq('id', orderId);
-            
+
         if (error) {
             console.error("Failed to delete order:", error);
             throw new Error(error.message);
         }
         this.dispatchStorageChange();
     }
+    static async cancelOrder(orderId) {
+        return this.updateOrderStatus(orderId, '취소됨');
+    }
+
+    static async updateOrdersForBuyer(originalOrderIds, buyerName, buyerContact, selectedItems) {
+        const existingOrders = (await this.getOrders()).filter(order => originalOrderIds.includes(order.id));
+        const existingByItem = {};
+        existingOrders.forEach(order => {
+            existingByItem[order.itemId] = order;
+        });
+
+        const updatedOrderIds = [];
+        for (const [itemId, qty] of selectedItems.entries()) {
+            const existing = existingByItem[itemId];
+            if (existing) {
+                await this.updateOrder(existing.id, {
+                    buyerName,
+                    itemId,
+                    qty,
+                    status: '대기'
+                });
+                updatedOrderIds.push(existing.id);
+            } else {
+                const created = await this.addOrder(buyerName, itemId, qty, buyerContact);
+                updatedOrderIds.push(created.id);
+            }
+        }
+
+        for (const order of existingOrders) {
+            if (!selectedItems.has(order.itemId)) {
+                await this.cancelOrder(order.id);
+            }
+        }
+
+        this.dispatchStorageChange();
+        return updatedOrderIds;
+    }
+
 
     static dispatchStorageChange() {
         window.dispatchEvent(new Event('storage'));
@@ -594,19 +637,18 @@ class BongBongStore {
 
     static async getAnalyticsData() {
         const buyers = await this.getAnalyticsBuyers();
-        if (!supabase) return { ...ANALYTICS_DATA, buyers, orders: [], items: [] };
+        if (!supabase) return { monthly: { labels: [], sales: [], volumes: [] }, weekly: { labels: [], sales: [], volumes: [] }, daily: { labels: [], sales: [], volumes: [] }, buyers, orders: [], items: [] };
 
         try {
             const orders = await this.getOrders();
             const items = await this.getItems();
+            const settlements = await this.getAllSettlements();
 
             return {
-                monthly: ANALYTICS_DATA.monthly,
-                weekly: ANALYTICS_DATA.weekly,
-                daily: ANALYTICS_DATA.daily,
                 buyers,
                 orders,
-                items
+                items,
+                settlements
             };
         } catch (err) {
             console.error("Failed to fetch analytics data:", err);
@@ -615,10 +657,10 @@ class BongBongStore {
                 window.BongBongUI.toast("분석 데이터 일부를 불러오지 못했습니다.");
             }
             return {
-                ...ANALYTICS_DATA,
                 buyers,
                 orders: [],
-                items: []
+                items: [],
+                settlements: []
             };
         }
     }
@@ -922,10 +964,18 @@ class BongBongStore {
         };
     }
 
-    static async sendAlimtalk(buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl) {
+    static async sendAlimtalk(buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl, templateId = null, customMessage = null) {
         if (!supabase) throw new Error("Database not connected");
         const { data, error } = await supabase.functions.invoke('send-alimtalk', {
-            body: { buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl }
+            body: {
+                buyerName,
+                contact,
+                totalAmount,
+                itemsDetailSummary,
+                invoiceUrl,
+                templateId,
+                customMessage
+            }
         });
         if (error) {
             console.error("Failed to invoke send-alimtalk function:", error);
@@ -1021,7 +1071,7 @@ class BongBongStore {
 
     static async saveSettlement(settlement) {
         if (!supabase) return;
-        
+
         // Find buyer uuid if buyerId is not uuid or name matches
         let buyerId = settlement.buyerId;
         if (!buyerId) {
@@ -1059,7 +1109,7 @@ class BongBongStore {
                 .select('id')
                 .eq('name', buyerName)
                 .maybeSingle();
-            
+
             if (!buyerData) return [];
 
             const { data: settlements, error } = await supabase
@@ -1067,7 +1117,7 @@ class BongBongStore {
                 .select('*')
                 .eq('buyer_id', buyerData.id)
                 .order('settled_date', { ascending: false });
-            
+
             if (error) throw error;
             return settlements.map(s => ({
                 id: s.id,
@@ -1103,15 +1153,15 @@ class BongBongStore {
         try {
             const orders = await this.getOrders();
             const items = await this.getItems();
-            const buyerPrices = await this.getBuyerItemPrices(await this.getBuyerIdByName(buyerName));
 
-            const buyerOrders = orders.filter(o => o.buyerName === buyerName);
+            const buyerPrices = await this.getBuyerItemPrices(await this.getBuyerIdByName(buyerName));
+            const buyerOrders = orders.filter(o => this.isActiveOrder(o) && o.buyerName === buyerName);
 
             return buyerOrders.map(o => {
                 const item = items.find(i => i.id === o.itemId);
                 const override = buyerPrices ? buyerPrices[o.itemId] : null;
                 const price = BongBongCalculator.getWholesaleUnitPrice(item, o.qty, override);
-                
+
                 return {
                     id: o.id,
                     createdAt: o.createdAt,
@@ -1142,6 +1192,58 @@ class BongBongStore {
         }
         this.dispatchStorageChange();
     }
+
+    static async getAllSettlements() {
+        if (!supabase) return [];
+        try {
+            const { data, error } = await supabase
+                .from('settlements')
+                .select('*')
+                .order('settled_date', { ascending: false });
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            console.error("Failed to fetch settlements:", err);
+            return [];
+        }
+    }
+
+    static async getRecentSettlements() {
+        if (!supabase) return [];
+        try {
+            const { data, error } = await supabase
+                .from('settlements')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(20);
+            if (error) throw error;
+
+            const { data: buyersData } = await supabase.from('buyers').select('id, name, contact');
+            const buyersMap = {};
+            (buyersData || []).forEach(b => {
+                buyersMap[b.id] = b;
+            });
+
+            return data.map(s => {
+                const buyer = buyersMap[s.buyer_id];
+                return {
+                    id: s.id,
+                    buyerName: buyer ? buyer.name : '알 수 없는 거래처',
+                    contact: buyer ? buyer.contact : '',
+                    settledDate: s.settled_date,
+                    totalAmount: s.total_amount,
+                    detail: s.detail,
+                    sendStatus: s.send_status,
+                    sentAt: s.sent_at,
+                    errorMessage: s.error_message,
+                    paymentStatus: s.payment_status || '미수금'
+                };
+            });
+        } catch (err) {
+            console.error("Failed to fetch recent settlements:", err);
+            return [];
+        }
+    }
 }
 
 // B2B 정산 계산기 (거래처별 수량에 따른 차등 도매 단가 적용 계산)
@@ -1149,7 +1251,7 @@ class BongBongCalculator {
     static async getItemTotalQty(itemId) {
         const orders = await BongBongStore.getOrders();
         return orders
-            .filter(order => order.itemId === itemId)
+            .filter(order => BongBongStore.isActiveOrder(order) && order.itemId === itemId)
             .reduce((sum, order) => sum + order.qty, 0);
     }
 
@@ -1174,7 +1276,7 @@ class BongBongCalculator {
 
     static async getProjectedRevenue() {
         const items = await BongBongStore.getItems();
-        const orders = await BongBongStore.getOrders();
+        const orders = (await BongBongStore.getOrders()).filter(order => BongBongStore.isActiveOrder(order));
         const priceMap = await BongBongStore.getBuyerItemPriceMap();
 
         const buyerSummary = {};
@@ -1203,30 +1305,30 @@ class BongBongCalculator {
 
     static getTierBenefitInfo(item, qty) {
         if (!item) return null;
-        
+
         const basePrice = item.basePrice;
         const tiers = item.tiers || [];
-        
+
         const currentUnitPrice = this.getWholesaleUnitPrice(item, qty);
         const currentTotal = qty * currentUnitPrice;
         const baseTotal = qty * basePrice;
         const savedAmount = baseTotal - currentTotal;
-        
+
         const sortedTiers = [...tiers].sort((a, b) => a.threshold - b.threshold);
         const currentTier = [...sortedTiers].reverse().find(t => qty >= t.threshold) || null;
-        
+
         const nextTier = sortedTiers.find(t => qty < t.threshold) || null;
-        
+
         let remainingQty = 0;
         let nextPrice = 0;
         let nextSavingsPerUnit = 0;
-        
+
         if (nextTier) {
             remainingQty = nextTier.threshold - qty;
             nextPrice = nextTier.price;
             nextSavingsPerUnit = currentUnitPrice - nextPrice;
         }
-        
+
         return {
             basePrice,
             currentUnitPrice,
@@ -1285,13 +1387,13 @@ class BongBongAuth {
         if (!supabase) return 'buyer';
         const user = await this.getCurrentUser();
         if (!user) return 'buyer';
-        
+
         const { data, error } = await supabase
             .from('user_roles')
             .select('role')
             .eq('id', user.id)
             .single();
-            
+
         if (error) {
             console.error("Failed to fetch user role:", error);
             return 'buyer';
@@ -1327,7 +1429,22 @@ class BongBongCrypt {
 
     static maskContact(contact) {
         if (!contact) return "";
+        const clean = contact.replace(/[^0-9]/g, '');
+        if (clean.length === 11) {
+            return `${clean.slice(0, 3)}-****-${clean.slice(7)}`;
+        } else if (clean.length === 10) {
+            return `${clean.slice(0, 3)}-****-${clean.slice(6)}`;
+        }
         return contact.replace(/(\d{3})-(\d{3,4})-(\d{4})/, '$1-****-$3');
+    }
+
+    static maskAddress(address) {
+        if (!address) return "";
+        const parts = address.split(' ');
+        if (parts.length > 2) {
+            return `${parts[0]} ${parts[1]} ***`;
+        }
+        return `${address}***`;
     }
 }
 
