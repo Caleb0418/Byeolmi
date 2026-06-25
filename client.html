@@ -52,10 +52,23 @@
             padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important;
         }
         #buyer-bottom-nav {
+            position: fixed !important;
+            left: 50% !important;
+            right: auto !important;
+            bottom: 0 !important;
+            transform: translateX(-50%) translateZ(0) !important;
+            z-index: 2147483000 !important;
             display: grid !important;
             grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
             align-items: stretch;
             gap: 0.25rem;
+            width: 100% !important;
+            max-width: 480px !important;
+            background: #ffffff !important;
+            border-top: 1px solid rgba(229, 231, 235, 0.95) !important;
+            box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.08) !important;
+            isolation: isolate;
+            will-change: transform;
         }
         #buyer-bottom-nav > button {
             display: flex !important;
@@ -145,7 +158,30 @@
                 <span class="material-symbols-outlined text-sm">storefront</span>
                 상품 보러가기
             </button>
-        </section>
+
+            <section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm space-y-3" aria-labelledby="home-recent-orders-title">
+                <div class="flex items-center justify-between gap-3">
+                    <h3 id="home-recent-orders-title" class="text-sm font-bold text-gray-900">최근 주문</h3>
+                    <button type="button" onclick="showMyOrders()" class="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-700 hover:bg-gray-50">나의 주문 보기</button>
+                </div>
+                <div id="home-recent-orders-list" class="space-y-2"></div>
+                <p id="home-recent-orders-empty" class="hidden rounded-lg bg-gray-50 p-3 text-xs font-bold text-gray-500">아직 주문 내역이 없습니다.</p>
+            </section>
+
+            <section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm space-y-3" aria-labelledby="home-frequent-items-title">
+                <div class="flex items-center justify-between gap-3">
+                    <h3 id="home-frequent-items-title" class="text-sm font-bold text-gray-900">자주 발주한 품목</h3>
+                    <button type="button" onclick="showProducts()" class="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-700 hover:bg-gray-50">전체 상품</button>
+                </div>
+                <div id="home-frequent-items-list" class="space-y-2"></div>
+                <p id="home-frequent-items-empty" class="hidden rounded-lg bg-gray-50 p-3 text-xs font-bold text-gray-500">주문이 쌓이면 자주 발주한 품목이 표시됩니다.</p>
+            </section>
+
+            <section class="rounded-xl border border-gray-100 bg-neutralBg p-4 shadow-sm space-y-2" aria-labelledby="home-notice-title">
+                <h3 id="home-notice-title" class="text-sm font-bold text-gray-900">오늘 안내</h3>
+                <p class="text-xs font-semibold leading-relaxed text-gray-600">승인 전 주문은 취소할 수 있어요.</p>
+                <p class="text-xs font-semibold leading-relaxed text-gray-600">완료된 주문은 명세서를 확인할 수 있어요.</p>
+            </section>        </section>
         <!-- STEP 1: Product Selection -->
         <div id="step-1" class="step-container hidden space-y-6">
             <!-- 4-Category Slider -->
@@ -708,7 +744,8 @@
             if (renderSeq !== catalogRenderSeq) return;
 
             renderCatalogItems(items, renderCategory);
-            await renderPendingOrdersPanel(items);
+            if (currentView === "home") await renderHomeDashboard(items);
+            else await renderPendingOrdersPanel(items);
             if (currentView === "myOrders") await renderMyOrders(items);
             if (currentView === "orderDetail" && currentDetailOrderKey) await renderOrderDetail(currentDetailOrderKey, items);
             bindFooterAccountOnce();
@@ -1187,6 +1224,97 @@
         if (headerTitle) headerTitle.textContent = title;
         if (backBtn) backBtn.classList.toggle("invisible", !canGoBack);
     }
+    async function renderHomeDashboard(itemsSource = null) {
+        const items = itemsSource ? await itemsSource : await BongBongStore.getItems();
+        await renderPendingOrdersPanel(items);
+        let orders = [];
+        try {
+            orders = await BongBongStore.getMyOrders();
+        } catch (err) {
+            console.error("Failed to load home orders:", err);
+        }
+        renderHomeRecentOrders(orders, items);
+        renderHomeFrequentItems(orders, items);
+    }
+
+    function renderHomeRecentOrders(orders, items) {
+        const list = document.getElementById("home-recent-orders-list");
+        const empty = document.getElementById("home-recent-orders-empty");
+        if (!list || !empty) return;
+        const groups = groupOrdersBySubmission(orders || [], items || []).slice(0, 2);
+        if (!groups.length) {
+            list.innerHTML = "";
+            empty.classList.remove("hidden");
+            return;
+        }
+        empty.classList.add("hidden");
+        list.innerHTML = groups.map(group => {
+            const statusKey = getOrderGroupStatus(group);
+            const status = getOrderStatusMeta(statusKey);
+            const itemSummary = group.itemLabels.slice(0, 2).join(", ");
+            const rest = group.itemLabels.length > 2 ? ` 외 ${group.itemLabels.length - 2}개` : "";
+            const dateLabel = formatPendingOrderDate(group.createdAt) || "주문 시간 확인 중";
+            return `
+                <div class="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <p class="text-[11px] font-bold text-gray-500">${dateLabel}</p>
+                        <span class="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${status.tone}">${status.label}</span>
+                    </div>
+                    <p class="mt-1 text-xs font-bold text-gray-900 leading-relaxed">${itemSummary}${rest}</p>
+                </div>
+            `;
+        }).join("");
+    }
+
+    function renderHomeFrequentItems(orders, items) {
+        const list = document.getElementById("home-frequent-items-list");
+        const empty = document.getElementById("home-frequent-items-empty");
+        if (!list || !empty) return;
+        const itemMap = new Map((items || []).map(item => [item.id, item]));
+        const counts = new Map();
+        (orders || []).filter(order => order.status !== "취소됨").forEach(order => {
+            const current = counts.get(order.itemId) || { itemId: order.itemId, qty: 0, count: 0 };
+            current.qty += Number(order.qty || 0);
+            current.count += 1;
+            counts.set(order.itemId, current);
+        });
+        let ranked = [...counts.values()]
+            .filter(entry => itemMap.has(entry.itemId))
+            .sort((a, b) => (b.count - a.count) || (b.qty - a.qty))
+            .slice(0, 3)
+            .map(entry => itemMap.get(entry.itemId));
+        if (!ranked.length) {
+            ranked = (items || []).filter(item => item.isAvailable !== false).slice(0, 3);
+        }
+        if (!ranked.length) {
+            list.innerHTML = "";
+            empty.classList.remove("hidden");
+            return;
+        }
+        empty.classList.add("hidden");
+        list.innerHTML = ranked.map(item => `
+            <div class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
+                <div class="min-w-0">
+                    <p class="truncate text-xs font-bold text-gray-900">${item.name}</p>
+                    <p class="mt-0.5 text-[11px] font-semibold text-gray-500">단위: ${item.unit}</p>
+                </div>
+                <button type="button" onclick="addFrequentItemToCart('${item.id}')" class="shrink-0 min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-800 hover:bg-gray-50">담기</button>
+            </div>
+        `).join("");
+    }
+
+    window.addFrequentItemToCart = async function(itemId) {
+        const items = await BongBongStore.getItems();
+        const item = items.find(nextItem => nextItem.id === itemId);
+        if (!item) {
+            showToast("담을 품목을 찾지 못했습니다.", "error");
+            return;
+        }
+        selectedItems.set(itemId, (selectedItems.get(itemId) || 0) + 1);
+        await showProducts();
+        updateFloatingBar();
+        showToast(`${item.name} 1${item.unit} 담았어요.`, "success");
+    };
     window.showHome = async function() {
         currentView = "home";
         currentDetailOrderKey = null;
@@ -1197,7 +1325,7 @@
         document.getElementById("buyer-bottom-nav")?.classList.remove("hidden");
         setHeaderForView("", "별미집", false);
         setBottomNavActive("home");
-        await renderPendingOrdersPanel(await BongBongStore.getItems());
+        await renderHomeDashboard(await BongBongStore.getItems());
     };
 
     window.showProducts = async function() {
@@ -1271,6 +1399,23 @@
         });
     }
 
+    function buildInvoiceUrlForGroup(group) {
+        const buyerName = group?.orders?.[0]?.buyerName || "";
+        const orderIds = (group?.orders || []).map(order => order.id).filter(Boolean).join(",");
+        const params = new URLSearchParams();
+        if (buyerName) params.set("buyer", buyerName);
+        if (orderIds) params.set("orderIds", orderIds);
+        return `invoice.html?${params.toString()}`;
+    }
+
+    window.openInvoiceForOrderGroup = function(groupKey) {
+        const group = latestMyOrderGroups.get(groupKey);
+        if (!group) {
+            showToast("명세서를 열 주문 정보를 찾지 못했습니다.", "error");
+            return;
+        }
+        window.open(buildInvoiceUrlForGroup(group), "_blank", "noopener");
+    };
     async function renderMyOrders(itemsSource = null) {
         const list = document.getElementById("my-orders-list");
         const empty = document.getElementById("my-orders-empty");
@@ -1291,12 +1436,15 @@
             empty.classList.add("hidden");
             list.innerHTML = visibleGroups.map(group => {
                 const key = getOrderGroupKey(group);
-                const status = getOrderStatusMeta(getOrderGroupStatus(group));
+                const statusKey = getOrderGroupStatus(group);
+                const status = getOrderStatusMeta(statusKey);
                 const orderIds = group.orders.map(order => order.id).join(",");
                 const itemSummary = group.itemLabels.slice(0, 2).join(", ");
                 const rest = group.itemLabels.length > 2 ? ` 외 ${group.itemLabels.length - 2}개` : "";
                 const dateLabel = formatPendingOrderDate(group.createdAt) || "주문 시간 확인 중";
-                const canCancel = getOrderGroupStatus(group) === "대기";
+                const canCancel = statusKey === "대기";
+                const canViewInvoice = statusKey === "완료";
+                const actionColumns = (canCancel || canViewInvoice) ? 2 : 1;
                 return `
                     <article class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm space-y-3">
                         <div class="flex items-start justify-between gap-3">
@@ -1309,8 +1457,9 @@
                         <div>
                             <p class="text-sm font-bold text-gray-900 leading-relaxed">${itemSummary}${rest}</p>
                         </div>
-                        <div class="grid ${canCancel ? "grid-cols-2" : "grid-cols-1"} gap-2">
+                        <div style="display:grid;grid-template-columns:repeat(${actionColumns},minmax(0,1fr));gap:0.5rem;">
                             ${canCancel ? `<button type="button" onclick="cancelPendingOrderGroup('${orderIds}')" class="min-h-11 rounded-xl border border-red-100 bg-red-50 px-3 text-xs font-bold text-red-600 hover:bg-red-100">취소하기</button>` : ""}
+                            ${canViewInvoice ? `<button type="button" onclick="openInvoiceForOrderGroup('${key}')" class="min-h-11 rounded-xl border border-green-100 bg-green-50 px-3 text-xs font-bold text-green-700 hover:bg-green-100">명세서</button>` : ""}
                             <button type="button" onclick="openOrderDetail('${key}')" class="min-h-11 rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold text-gray-800 hover:bg-gray-50">상세 보기</button>
                         </div>
                     </article>
@@ -1381,9 +1530,10 @@
                     <h3 class="text-sm font-bold text-gray-900">주문 상태</h3>
                     ${statusKey === "취소됨" ? `<p class="rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs font-bold text-gray-500">취소된 주문입니다.</p>` : `<ol class="space-y-3">${timeline}</ol>`}
                 </div>
-                <div class="grid ${statusKey === "대기" ? "grid-cols-2" : "grid-cols-1"} gap-2">
+                <div style="display:grid;grid-template-columns:repeat(${statusKey === "대기" || statusKey === "완료" ? 2 : 1},minmax(0,1fr));gap:0.5rem;">
                     <button type="button" onclick="showMyOrders()" class="min-h-12 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 hover:bg-gray-50">목록으로</button>
                     ${statusKey === "대기" ? `<button type="button" onclick="cancelPendingOrderGroup('${orderIds}')" class="min-h-12 rounded-xl border border-red-100 bg-red-50 text-sm font-bold text-red-600 hover:bg-red-100">주문 취소</button>` : ""}
+                    ${statusKey === "완료" ? `<button type="button" onclick="openInvoiceForOrderGroup('${groupKey}')" class="min-h-12 rounded-xl border border-green-100 bg-green-50 text-sm font-bold text-green-700 hover:bg-green-100">명세서</button>` : ""}
                 </div>
             </article>
         `;
