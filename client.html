@@ -797,8 +797,8 @@
         step2.classList.add("hidden");
         step3.classList.add("hidden");
 
-        // 첫 화면(1단계)에서는 돌아갈 곳이 없으므로 뒤로가기 화살표를 숨긴다.
-        if (backBtn) backBtn.classList.toggle("invisible", stepNumber === 1);
+        if (backBtn) backBtn.classList.remove("invisible");
+        if (stepIndicator) stepIndicator.classList.remove("hidden");
 
         if (stepNumber === 1) {
             document.getElementById("buyer-bottom-nav")?.classList.remove("hidden");
@@ -827,7 +827,11 @@
             showMyOrders();
             return;
         }
-        if (currentView === "myOrders") {
+        if (currentView === "myOrders" || currentView === "profile") {
+            showHome();
+            return;
+        }
+        if (currentView === "products" && currentStep === 1) {
             showHome();
             return;
         }
@@ -1134,11 +1138,18 @@
         const stepIndicator = document.getElementById("step-indicator");
         const headerTitle = document.getElementById("header-title");
         const backBtn = document.getElementById("header-back-btn");
-        if (stepIndicator) stepIndicator.textContent = indicator;
+        if (stepIndicator) {
+            if (indicator) {
+                stepIndicator.textContent = indicator;
+                stepIndicator.classList.remove("hidden");
+            } else {
+                stepIndicator.textContent = "";
+                stepIndicator.classList.add("hidden");
+            }
+        }
         if (headerTitle) headerTitle.textContent = title;
         if (backBtn) backBtn.classList.toggle("invisible", !canGoBack);
     }
-
     window.showHome = async function() {
         currentView = "home";
         currentDetailOrderKey = null;
@@ -1147,7 +1158,7 @@
         document.getElementById("floating-bar")?.classList.add("hidden");
         document.getElementById("home-view")?.classList.remove("hidden");
         document.getElementById("buyer-bottom-nav")?.classList.remove("hidden");
-        setHeaderForView("홈", "별미집", false);
+        setHeaderForView("", "별미집", false);
         setBottomNavActive("home");
         await renderPendingOrdersPanel(await BongBongStore.getItems());
     };
@@ -1177,7 +1188,7 @@
         const contactEl = document.getElementById("profile-buyer-contact");
         if (nameEl) nameEl.textContent = name;
         if (contactEl) contactEl.textContent = contact;
-        setHeaderForView("내 정보", "내 정보", true);
+        setHeaderForView("", "내 정보", true);
         setBottomNavActive("profile");
     };
 
@@ -1190,7 +1201,7 @@
         document.getElementById("floating-bar")?.classList.add("hidden");
         document.getElementById("my-orders-view")?.classList.remove("hidden");
         document.getElementById("buyer-bottom-nav")?.classList.remove("hidden");
-        setHeaderForView("주문 내역", "나의 주문", true);
+        setHeaderForView("", "나의 주문", true);
         setBottomNavActive("my-orders");
         await renderMyOrders();
     };
@@ -1208,7 +1219,7 @@
         document.getElementById("floating-bar")?.classList.add("hidden");
         document.getElementById("order-detail-view")?.classList.remove("hidden");
         document.getElementById("buyer-bottom-nav")?.classList.add("hidden");
-        setHeaderForView("주문 상세", "주문 진행 단계", true);
+        setHeaderForView("", "주문 상세", true);
         setBottomNavActive("my-orders");
         await renderOrderDetail(groupKey);
     };
