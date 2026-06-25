@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>별미집 클라이언트 품목 로컬 확인</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-900">
+  <main class="mx-auto min-h-screen max-w-[480px] bg-white">
+    <header class="border-b border-gray-100 px-5 py-6 text-center">
+      <p class="text-sm font-bold text-gray-500">로컬 확인용</p>
+      <h1 class="mt-1 text-xl font-black">도매 발주 품목 선택</h1>
+      <p class="mt-2 text-xs text-gray-500">실제 Supabase items 데이터를 읽어 초기 전체보기 렌더를 확인합니다.</p>
+    </header>
+
+    <section class="space-y-5 p-5">
+      <nav class="no-scrollbar flex gap-6 overflow-x-auto border-b border-gray-100 pb-3 text-sm font-bold">
+        <button type="button" data-category="all" class="category-tab min-h-11 shrink-0 border-b-2 border-black px-2 pb-1 text-black">전체보기</button>
+        <button type="button" data-category="fresh" class="category-tab min-h-11 shrink-0 px-2 pb-1 text-gray-500">신선식품</button>
+        <button type="button" data-category="easy" class="category-tab min-h-11 shrink-0 px-2 pb-1 text-gray-500">간편조리</button>
+        <button type="button" data-category="snack" class="category-tab min-h-11 shrink-0 px-2 pb-1 text-gray-500">간식</button>
+        <button type="button" data-category="living" class="category-tab min-h-11 shrink-0 px-2 pb-1 text-gray-500">생활용품</button>
+      </nav>
+
+      <div class="rounded-xl border border-gray-100 bg-gray-50 p-5">
+        <h2 class="text-lg font-black">도매 파트너 발주방</h2>
+        <p class="mt-2 text-xs text-gray-500">전체보기에서 초기에 품목이 바로 뜨는지 확인하세요.</p>
+      </div>
+
+      <section class="space-y-4">
+        <div class="flex items-center justify-between border-b pb-2">
+          <h3 class="text-sm font-black">취급 도매 품목 카탈로그</h3>
+          <button id="reload-btn" type="button" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold">새로고침</button>
+        </div>
+        <div id="status" class="rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">초기화 중...</div>
+        <div id="items-container" class="space-y-3"></div>
+      </section>
+
+      <details class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs">
+        <summary class="cursor-pointer font-bold">렌더 로그</summary>
+        <pre id="log" class="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-[11px] leading-relaxed text-gray-600"></pre>
+      </details>
+    </section>
+  </main>
+
+  <script>
+    const SUPABASE_URL = "https://jobksthdcqslozwrxcxy.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_2eMUEbeE4AOwCeHzqDXkyA_imFLRVps";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let activeCategory = "all";
+    let itemsCache = null;
+    let renderSeq = 0;
+
+    const container = document.getElementById("items-container");
+    const statusEl = document.getElementById("status");
+    const logEl = document.getElementById("log");
+
+    function log(message) {
+      const now = new Date().toLocaleTimeString("ko-KR", { hour12: false });
+      logEl.textContent += `[${now}] ${message}\n`;
+    }
+
+    function setStatus(message, tone = "info") {
+      const tones = {
+        info: "bg-blue-50 text-blue-700",
+        ok: "bg-green-50 text-green-700",
+        error: "bg-red-50 text-red-700"
+      };
+      statusEl.className = `rounded-lg px-3 py-2 text-xs font-bold ${tones[tone] || tones.info}`;
+      statusEl.textContent = message;
+    }
+
+    function setActiveTab(category) {
+      document.querySelectorAll(".category-tab").forEach((button) => {
+        const active = button.dataset.category === category;
+        button.className = active
+          ? "category-tab min-h-11 shrink-0 border-b-2 border-black px-2 pb-1 text-black"
+          : "category-tab min-h-11 shrink-0 px-2 pb-1 text-gray-500";
+      });
+    }
+
+    async function getItems(force = false) {
+      if (itemsCache && !force) return itemsCache;
+      const started = performance.now();
+      const { data, error } = await db
+        .from("items")
+        .select("*, item_tiers(*)");
+
+      if (error) throw new Error(error.message);
+
+      itemsCache = (data || []).map((item) => ({
+        id: item.id,
+        category: item.category,
+        name: item.name,
+        unit: item.unit,
+        isAvailable: item.is_available
+      }));
+      log(`items 조회 완료: ${itemsCache.length}개, ${Math.round(performance.now() - started)}ms`);
+      return itemsCache;
+    }
+
+    function renderItems(items, category) {
+      const filtered = category === "all" ? items : items.filter((item) => item.category === category);
+      if (!filtered.length) {
+        container.innerHTML = '<p class="py-8 text-center text-xs text-gray-500">취급 중인 품목이 없습니다.</p>';
+        return;
+      }
+
+      container.innerHTML = filtered.map((item) => `
+        <article class="flex items-center justify-between rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+          <div>
+            <h4 class="text-sm font-black text-gray-900">${item.name}</h4>
+            <p class="mt-1 text-xs text-gray-500">단위: ${item.unit} / 카테고리: ${item.category}</p>
+          </div>
+          <span class="rounded-lg border px-2.5 py-1 text-xs font-bold ${item.isAvailable !== false ? "border-green-100 bg-green-50 text-green-700" : "border-red-100 bg-red-50 text-red-600"}">
+            ${item.isAvailable !== false ? "공급 중" : "일시 품절"}
+          </span>
+        </article>
+      `).join("");
+    }
+
+    async function renderPage(category = activeCategory, force = false) {
+      const seq = ++renderSeq;
+      const renderCategory = category || "all";
+      activeCategory = renderCategory;
+      setActiveTab(renderCategory);
+      setStatus(`${renderCategory} 품목 불러오는 중...`);
+      container.innerHTML = '<p class="py-8 text-center text-xs text-gray-400">품목을 불러오는 중입니다...</p>';
+      log(`render start: category=${renderCategory}, seq=${seq}`);
+
+      try {
+        const items = await getItems(force);
+        if (seq !== renderSeq) {
+          log(`render skip: stale seq=${seq}, latest=${renderSeq}`);
+          return;
+        }
+        renderItems(items, renderCategory);
+        setStatus(`렌더 완료: ${renderCategory}, 전체 ${items.length}개`, "ok");
+        log(`render done: category=${renderCategory}, seq=${seq}`);
+      } catch (error) {
+        setStatus(`오류: ${error.message}`, "error");
+        container.innerHTML = '<p class="py-8 text-center text-xs text-red-600">품목을 불러오지 못했습니다.</p>';
+        log(`render error: ${error.message}`);
+      }
+    }
+
+    document.querySelectorAll(".category-tab").forEach((button) => {
+      button.addEventListener("click", () => renderPage(button.dataset.category));
+    });
+
+    document.getElementById("reload-btn").addEventListener("click", () => {
+      itemsCache = null;
+      renderPage(activeCategory, true);
+    });
+
+    document.addEventListener("DOMContentLoaded", () => renderPage("all"));
+  </script>
+</body>
+</html>
