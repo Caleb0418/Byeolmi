@@ -17,14 +17,14 @@ const corsHeaders = {
 function getSolapiHeaders() {
   const date = new Date().toISOString();
   const salt = Math.random().toString(36).substring(2, 12);
-  
+
   // HMAC SHA256 Signature
   // Deno Web Crypto API 활용
   const data = date + salt;
   const encoder = new TextEncoder();
   const keyBuf = encoder.encode(SOLAPI_API_SECRET);
   const dataBuf = encoder.encode(data);
-  
+
   // We can also use simple HMAC signature or standard library
   // For simplicity and robust runtime execution in Deno:
   // Solapi signature is: hmac_sha256(secret, date + salt)
@@ -40,7 +40,7 @@ async function getAuthHeaderValue(date: string, salt: string) {
   const encoder = new TextEncoder();
   const keyBuf = encoder.encode(SOLAPI_API_SECRET);
   const dataBuf = encoder.encode(date + salt);
-  
+
   const key = await crypto.subtle.importKey(
     "raw",
     keyBuf,
@@ -48,11 +48,11 @@ async function getAuthHeaderValue(date: string, salt: string) {
     false,
     ["sign"]
   );
-  
+
   const sigBuf = await crypto.subtle.sign("HMAC", key, dataBuf);
   const sigArray = Array.from(new Uint8Array(sigBuf));
   const signature = sigArray.map(b => b.toString(16).padStart(2, "0")).join("");
-  
+
   return `HMAC-SHA256 apiKey=${SOLAPI_API_KEY}, date=${date}, salt=${salt}, signature=${signature}`;
 }
 
@@ -63,7 +63,7 @@ serve(async (req) => {
   }
 
   try {
-    const { buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl } = await req.json();
+    const { buyerName, contact, totalAmount, itemsDetailSummary, invoiceUrl, templateId, customMessage } = await req.json();
 
     if (!buyerName || !contact || !totalAmount) {
       return new Response(JSON.stringify({ error: "Missing parameters" }), {
@@ -84,8 +84,8 @@ serve(async (req) => {
     const authorization = await getAuthHeaderValue(date, salt);
 
     // 2. 알림톡 발송 양식 (템플릿 매칭 넛지 문구 구성)
-    // 알림톡 가이드라인에 맞춰 변수값 삽입
-    const messageBody = `[별미집 정산 요청 안내]
+    const activeTemplateId = templateId || SOLAPI_TEMPLATE_ID;
+    const messageBody = customMessage || `[별미집 정산 요청 안내]
 
 안녕하세요, ${buyerName} 대표님.
 금일 별미집 도매 발주에 대한 정산 명세서가 발행되었습니다.
@@ -107,7 +107,7 @@ ${itemsDetailSummary}
           type: "ATA", // 알림톡 타입 ATA
           kakaoOptions: {
             pfId: SOLAPI_PFID,
-            templateId: SOLAPI_TEMPLATE_ID,
+            templateId: activeTemplateId,
             buttons: [
               {
                 buttonType: "WL", // 웹링크 버튼

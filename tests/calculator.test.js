@@ -27,30 +27,30 @@ const BongBongCalculator = {
 
     getTierBenefitInfo(item, qty) {
         if (!item) return null;
-        
+
         const basePrice = item.basePrice;
         const tiers = item.tiers || [];
-        
+
         const currentUnitPrice = this.getWholesaleUnitPrice(item, qty);
         const currentTotal = qty * currentUnitPrice;
         const baseTotal = qty * basePrice;
         const savedAmount = baseTotal - currentTotal;
-        
+
         const sortedTiers = [...tiers].sort((a, b) => a.threshold - b.threshold);
         const currentTier = [...sortedTiers].reverse().find(t => qty >= t.threshold) || null;
-        
+
         const nextTier = sortedTiers.find(t => qty < t.threshold) || null;
-        
+
         let remainingQty = 0;
         let nextPrice = 0;
         let nextSavingsPerUnit = 0;
-        
+
         if (nextTier) {
             remainingQty = nextTier.threshold - qty;
             nextPrice = nextTier.price;
             nextSavingsPerUnit = currentUnitPrice - nextPrice;
         }
-        
+
         return {
             basePrice,
             currentUnitPrice,
@@ -143,6 +143,72 @@ try {
     process.exit(1);
 }
 
+// Mock BongBongCrypt for testing masking utilities
+const BongBongCrypt = {
+    maskContact(contact) {
+        if (!contact) return "";
+        const clean = contact.replace(/[^0-9]/g, '');
+        if (clean.length === 11) {
+            return `${clean.slice(0, 3)}-****-${clean.slice(7)}`;
+        } else if (clean.length === 10) {
+            return `${clean.slice(0, 3)}-***-${clean.slice(6)}`;
+        }
+        return contact.replace(/(\d{3})-(\d{3,4})-(\d{4})/, '$1-****-$3');
+    },
+    maskAddress(address) {
+        if (!address) return "";
+        const parts = address.split(' ');
+        if (parts.length > 2) {
+            return `${parts[0]} ${parts[1]} ***`;
+        }
+        return `${address}***`;
+    }
+};
+
+// ... (existing test outputs)
+
+// 6. 연락처 마스킹 검증 (하이픈 있는 경우와 없는 경우)
+try {
+    const masked1 = BongBongCrypt.maskContact("010-1234-5678");
+    assert.strictEqual(masked1, "010-****-5678", "하이픈이 있는 연락처는 가운데가 마스킹되어야 합니다.");
+
+    const masked2 = BongBongCrypt.maskContact("01098765432");
+    assert.strictEqual(masked2, "010-****-5432", "하이픈이 없는 11자리 연락처는 하이픈과 함께 마스킹되어야 합니다.");
+
+    console.log("✓ Test 6 Passed: Contact masking verification");
+} catch (err) {
+    console.error("✗ Test 6 Failed:", err.message);
+    process.exit(1);
+}
+
+// 7. 주소 마스킹 검증 (2단어 초과와 2단어 이하)
+try {
+    const maskedAddr1 = BongBongCrypt.maskAddress("인천광역시 중구 연안부두로 34");
+    assert.strictEqual(maskedAddr1, "인천광역시 중구 ***", "2단어 초과 주소는 두 번째 단어까지만 보여주어야 합니다.");
+
+    const maskedAddr2 = BongBongCrypt.maskAddress("서울 강서구");
+    assert.strictEqual(maskedAddr2, "서울 강서구***", "2단어 이하 주소는 적당히 마스킹되어야 합니다.");
+
+    console.log("✓ Test 7 Passed: Address masking verification");
+} catch (err) {
+    console.error("✗ Test 7 Failed:", err.message);
+    process.exit(1);
+}
+
+// 8. 경계값 단가 계산 검증
+try {
+    const priceAtThreshold = BongBongCalculator.getWholesaleUnitPrice(mockPotato, 10);
+    assert.strictEqual(priceAtThreshold, 18000, "정확히 경계값(10개)에 도달했을 때 도매 할인가 18,000원이 적용되어야 합니다.");
+
+    const priceExactlyUnder = BongBongCalculator.getWholesaleUnitPrice(mockPotato, 9);
+    assert.strictEqual(priceExactlyUnder, 20000, "경계값 미만(9개)일 때는 기본단가 20,000원이 적용되어야 합니다.");
+
+    console.log("✓ Test 8 Passed: Boundary price validation");
+} catch (err) {
+    console.error("✗ Test 8 Failed:", err.message);
+    process.exit(1);
+}
+
 console.log("==========================================");
-console.log("🎉 All 5 unit tests completed successfully!");
+console.log("🎉 All 8 unit tests completed successfully!");
 console.log("==========================================");
