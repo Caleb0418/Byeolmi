@@ -188,10 +188,10 @@
                                     <label class="block text-sm font-bold text-gray-500 mb-1">품목명</label>
                                     <input type="text" id="edit-product-name" required placeholder="예: 무농약 대파" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
                                 </div>
-                                <div>
+                                <div class="relative">
                                     <label class="block text-sm font-bold text-gray-500 mb-1">카테고리</label>
-                                    <input type="text" id="edit-product-category" list="product-category-options" required placeholder="예: 신선식품" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
-                                    <datalist id="product-category-options"></datalist>
+                                    <input type="text" id="edit-product-category" required autocomplete="off" placeholder="예: 신선식품" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
+                                    <div id="edit-product-category-menu" class="hidden absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"></div>
                                 </div>
                             </div>
 
@@ -1085,9 +1085,10 @@
                         <label class="block text-sm font-bold text-gray-500 mb-1">품목명</label>
                         <input type="text" id="add-product-name" required placeholder="예: 무농약 대파" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
                     </div>
-                    <div>
+                    <div class="relative">
                         <label class="block text-sm font-bold text-gray-500 mb-1">카테고리</label>
-                        <input type="text" id="add-product-category" list="product-category-options" required placeholder="예: 신선식품" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
+                        <input type="text" id="add-product-category" required autocomplete="off" placeholder="예: 신선식품" class="w-full rounded-xl border-gray-200 text-sm focus:border-primary focus:ring-primary">
+                        <div id="add-product-category-menu" class="hidden absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"></div>
                     </div>
                 </div>
 
@@ -2794,9 +2795,49 @@
         }[char]));
     }
 
+
+    let latestProductCategoryOptions = BongBongStore.getCategories([], { includeDefaults: true });
+
+    function hideProductCategoryMenus() {
+        ["edit-product-category-menu", "add-product-category-menu"].forEach(id => {
+            document.getElementById(id)?.classList.add("hidden");
+        });
+    }
+
+    function renderProductCategoryMenu(inputId, menuId) {
+        const input = document.getElementById(inputId);
+        const menu = document.getElementById(menuId);
+        if (!input || !menu) return;
+
+        const query = input.value.trim().toLowerCase();
+        const options = latestProductCategoryOptions.filter(category => {
+            const label = String(category.name || "").toLowerCase();
+            const id = String(category.id || "").toLowerCase();
+            return !query || label.includes(query) || id.includes(query);
+        });
+        const exactExists = latestProductCategoryOptions.some(category => category.name === input.value.trim() || category.id === BongBongStore.getCategoryId(input.value));
+        if (input.value.trim() && !exactExists) {
+            options.unshift({ id: input.value.trim(), name: `새 분류로 추가: ${input.value.trim()}`, value: input.value.trim() });
+        }
+
+        menu.innerHTML = "";
+        options.slice(0, 8).forEach(category => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "block w-full px-4 py-3 text-left text-sm font-bold text-gray-700 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none";
+            button.textContent = category.name;
+            button.addEventListener("mousedown", (event) => {
+                event.preventDefault();
+                input.value = category.value || category.name;
+                hideProductCategoryMenus();
+            });
+            menu.appendChild(button);
+        });
+
+        menu.classList.toggle("hidden", menu.children.length === 0);
+    }
+
     async function refreshProductCategoryOptions(itemsSource = null) {
-        const datalist = document.getElementById("product-category-options");
-        if (!datalist) return;
         let items = itemsSource;
         if (!items) {
             try {
@@ -2805,14 +2846,31 @@
                 items = [];
             }
         }
-        datalist.innerHTML = "";
-        BongBongStore.getCategories(items, { includeDefaults: true }).forEach(category => {
-            const option = document.createElement("option");
-            option.value = category.name;
-            datalist.appendChild(option);
+        latestProductCategoryOptions = BongBongStore.getCategories(items, { includeDefaults: true });
+        if (document.activeElement?.id === "edit-product-category") renderProductCategoryMenu("edit-product-category", "edit-product-category-menu");
+        if (document.activeElement?.id === "add-product-category") renderProductCategoryMenu("add-product-category", "add-product-category-menu");
+    }
+
+    function setupProductCategoryInput(inputId, menuId) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        input.addEventListener("focus", async () => {
+            await refreshProductCategoryOptions();
+            renderProductCategoryMenu(inputId, menuId);
+        });
+        input.addEventListener("input", () => renderProductCategoryMenu(inputId, menuId));
+        input.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") hideProductCategoryMenus();
         });
     }
 
+    setupProductCategoryInput("edit-product-category", "edit-product-category-menu");
+    setupProductCategoryInput("add-product-category", "add-product-category-menu");
+    document.addEventListener("click", (event) => {
+        if (!event.target.closest("#edit-product-category-menu, #add-product-category-menu, #edit-product-category, #add-product-category")) {
+            hideProductCategoryMenus();
+        }
+    });
     async function renderModalProductList() {
         try {
             const items = await BongBongStore.getItems();
