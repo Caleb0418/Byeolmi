@@ -1442,10 +1442,11 @@
         // Date Display
         const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
         document.getElementById('current-date').textContent = new Date().toLocaleDateString('ko-KR', dateOptions);
+        const DASHBOARD_FALLBACK_REFRESH_MS = 30 * 1000;
 
         // Core Render Function
         window.renderAdminDashboard = async function() {
-            // 일괄 편집 모드일 때 3초 타이머나 외부 스토리지 싱크로 인한 자동 리렌더링 강제 차단 (입력값 보존)
+            // 일괄 편집 모드일 때 자동 리렌더링 강제 차단 (입력값 보존)
             const isManualCall = arguments[0] === true;
             if (isBulkEditing && !isManualCall) return;
 
@@ -2214,7 +2215,7 @@
         renderAdminDashboard();
         refreshPendingApprovalBadge(); // 사이드바 승인 대기 배지 초기 로드
 
-        // Supabase Realtime 구독 설정 (기존 3초 주기 폴링 타이머 제거)
+        // Supabase Realtime 구독 설정: 주문/품목 변경은 즉시 반영한다.
         if (supabase) {
             supabase
                 .channel('bb_changes')
@@ -2246,6 +2247,14 @@
                 )
                 .subscribe();
         }
+
+        // Realtime 연결 누락/일시 끊김에 대비한 30초 보조 갱신.
+        // 백그라운드 탭에서는 DB 요청을 만들지 않는다.
+        window.setInterval(async () => {
+            if (document.hidden) return;
+            await renderAdminDashboard();
+        }, DASHBOARD_FALLBACK_REFRESH_MS);
+
         window.addEventListener('storage', async () => {
             await renderAdminDashboard();
         });

@@ -93,8 +93,8 @@
   - `deleteApprovedOwner`가 오류를 무시하던 부분을 **로깅+전파**로 수정.
 - **AC 충족**: 실패가 사용자에게 보임 ✔ / Store 반환 계약은 유지(저위험) ✔
 
-### P2-3. 폴링 → Realtime ✔ (기존 구현 확인)
-- **상태**: `index.html`(orders·items 구독)와 `client.html`(items 구독)이 **이미 Supabase Realtime 구독**을 사용하며, `setInterval` 3초 폴링은 코드 전반에서 제거되어 있음(잔존 0건 확인). 추가 변경 불필요.
+### P2-3. Realtime + 30초 보조 갱신 ✔
+- **상태**: `index.html`은 orders·items Realtime 구독을 기본으로 사용하고, 연결 누락에 대비한 30초 보조 갱신만 유지함. `client.html`은 items Realtime 구독을 사용함.
 
 ### P2-4. 고령 사용자 접근성 (초기 개선) ✔ / 전체 감사 ⏳
 - **변경 파일**: `index.html`, `client.html`, `invoice.html`

@@ -72,7 +72,7 @@ children.push(
   new Paragraph({ children: [new PageBreak()] }),
   C.h1('3. 무엇을 할 수 있나'),
   C.p('핵심 기능을 사장님 입장에서 정리했습니다.'),
-  C.bullet([new TextRun({ text: '발주 자동 취합: ', bold: true }), new TextRun('거래처가 휴대폰으로 넣은 발주가 약 3초마다 사장님 화면에 자동으로 모입니다. 전화 주문은 수기로 바로 추가할 수 있습니다.')]),
+  C.bullet([new TextRun({ text: '발주 자동 취합: ', bold: true }), new TextRun('거래처가 휴대폰으로 넣은 발주가 실시간으로 사장님 화면에 자동으로 모이고, 연결 상태에 따라 최대 30초 내 갱신됩니다. 전화 주문은 수기로 바로 추가할 수 있습니다.')]),
   C.bullet([new TextRun({ text: '수량별 단가 자동 계산: ', bold: true }), new TextRun('“10박스 이상 18,000원, 30박스 이상 15,000원”처럼 구간 단가를 설정해 두면 금액이 자동으로 계산·합산됩니다.')]),
   C.bullet([new TextRun({ text: '원클릭 정산 알림톡: ', bold: true }), new TextRun('발주를 승인하면 거래처별 정산 명세서를 알림톡으로 한 번에 보낼 수 있습니다. 보내기 전 미리보기로 내용을 확인합니다.')]),
   C.bullet([new TextRun({ text: '매출·통계: ', bold: true }), new TextRun('월·주·일 매출 추이, 품목별 판매 비중, 거래처별 누적과 수금/미수금을 그래프와 표로 봅니다.')]),

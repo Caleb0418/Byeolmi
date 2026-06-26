@@ -33,7 +33,7 @@
   - `[x]` `app.js` 내 `BongBongStore`에 개별 주문 정보 수정 및 주문 취소 로직 신설
   - `[x]` `index.html` 내 테이블 헤더 우측 끝 '관리' 열에 `[수정 / 완료]` 일괄 토글 버튼 구현
   - `[x]` `[수정]` 클릭 시, 모든 행이 일괄적으로 편집 폼(`input/select`)으로 전환되는 렌더링 로직 적용
-  - `[x]` 편집 모드 실행 중 3초 자동 새로고침 타이머가 리렌더링을 일으켜 타이핑이 리셋되지 않도록 방어 로직 설계 및 적용
+  - `[x]` 편집 모드 실행 중 30초 보조 새로고침 타이머가 리렌더링을 일으켜 타이핑이 리셋되지 않도록 방어 로직 설계 및 적용
   - `[x]` `[완료]` 클릭 시, 화면에 렌더링된 모든 인풋의 변경 데이터를 검증하여 일괄적으로 영구 저장하는 toggleBulkEdit 로직 추가
   - `[x]` 각 행의 우측 끝에 주문 삭제를 즉시 실행하는 `X` 아이콘 버튼 구현 및 연동
 
@@ -57,7 +57,7 @@
 - `[x]` **[Phase 11] P2 안정성/품질** — 상세: `docs/antigravity_progress.md`
   - `[x]` (P2-1) 테스트 보강 — 실제 로직 import, 20개 케이스, `npm test`
   - `[x]` (P2-2) silent failure 제거 — 공용 토스트 + 렌더링 catch 연결, `deleteApprovedOwner` 전파
-  - `[x]` (P2-3) 폴링→Realtime — 기존 구현 확인(orders/items/client 구독, 폴링 0건)
+  - `[x]` (P2-3) 폴링→Realtime — 기존 구현 확인(orders/items/client 구독, 30초 보조 갱신 유지)
   - `[x]` (P2-4) 접근성 초기 개선 — focus-visible + prefers-reduced-motion (3개 페이지)
     - `[ ]` (후속) 색대비·터치타깃·aria-label·스크린리더 정식 WCAG 감사 (a11y-architect + 브라우저)
 
