@@ -74,7 +74,7 @@ if (window.z) {
 // 1. 기본 카테고리 정의 + 사용자 정의 분류 헬퍼
 const CATEGORIES = [
     { id: "fresh", name: "신선식품" },
-    { id: "easy", name: "간편조리" },
+    { id: "easy", name: "가공식품", aliases: ["간편조리"] },
     { id: "snack", name: "간식" },
     { id: "living", name: "생활용품" }
 ];
@@ -86,7 +86,11 @@ function normalizeCategoryValue(value) {
 function getCategoryId(value) {
     const normalized = normalizeCategoryValue(value);
     if (!normalized) return "";
-    const matched = CATEGORIES.find(category => category.id === normalized || category.name === normalized);
+    const matched = CATEGORIES.find(category => (
+        category.id === normalized ||
+        category.name === normalized ||
+        (category.aliases || []).includes(normalized)
+    ));
     return matched ? matched.id : normalized;
 }
 
@@ -1618,3 +1622,4 @@ if (typeof module !== 'undefined' && module.exports) {
         buildCategoryOptions
     };
 }
+
