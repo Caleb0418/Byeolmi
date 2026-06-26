@@ -6,7 +6,10 @@ const suite = createSuite("ItemCategories");
 
 suite.test("기본 분류 라벨은 기존 ID로 정규화된다", () => {
     assert.strictEqual(getCategoryId("신선식품"), "fresh");
+    assert.strictEqual(getCategoryId("가공식품"), "easy");
+    assert.strictEqual(getCategoryId("간편조리"), "easy");
     assert.strictEqual(getCategoryLabel("fresh"), "신선식품");
+    assert.strictEqual(getCategoryLabel("easy"), "가공식품");
 });
 
 suite.test("사용자 정의 분류는 그대로 보존된다", () => {
