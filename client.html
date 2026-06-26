@@ -79,6 +79,19 @@
             gap: 0.125rem;
             white-space: nowrap;
         }
+        #floating-bar {
+            position: fixed !important;
+            left: 50% !important;
+            right: auto !important;
+            bottom: calc(4.75rem + env(safe-area-inset-bottom)) !important;
+            transform: translateX(-50%) translateZ(0) !important;
+            z-index: 2147482990 !important;
+            width: 100% !important;
+            max-width: 480px !important;
+        }
+        #floating-bar.hidden {
+            display: none !important;
+        }
         #my-orders-filter-tabs {
             display: grid !important;
             grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
@@ -203,7 +216,7 @@
 
             <!-- STEP 1 Bottom Floating Action Bar -->
             <div id="floating-bar" class="hidden fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 w-full max-w-[480px] px-4 py-3 bg-white/95 border-t border-gray-100 z-40 shadow-[0_-8px_24px_rgba(0,0,0,0.04)] backdrop-blur">
-                <button onclick="goToStep(2)" class="w-full bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm transform active:scale-98 transition-all flex items-center justify-center gap-2 text-sm">
+                <button onclick="advanceFromProducts()" class="w-full bg-brandDark hover:bg-black text-white font-bold py-4 rounded-xl shadow-sm transform active:scale-98 transition-all flex items-center justify-center gap-2 text-sm">
                     <span id="selected-summary-txt">0개 품목 선택됨</span>
                     <span class="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
